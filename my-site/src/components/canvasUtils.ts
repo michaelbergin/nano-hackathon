@@ -70,7 +70,7 @@ export function drawPathOnContext(
 }
 
 /**
- * Generate a synchronous canvas screenshot from layers (vector layers only)
+ * Generate a synchronous canvas screenshot from layers
  */
 export function getCanvasScreenshot(
   layers: Layer[],
@@ -111,10 +111,46 @@ export function getCanvasScreenshot(
       continue;
     }
     layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
-    if (layer.type === "vector") {
+    if (layer.type === "image") {
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+      img.src = layer.imageSrc;
+      let { x, y, width: w, height: h } = layer;
+      // We cannot await decode here; draw will be a no-op if not yet loaded
+      if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+        if (
+          typeof x !== "number" ||
+          typeof y !== "number" ||
+          typeof w !== "number" ||
+          typeof h !== "number"
+        ) {
+          const imageAspectRatio = img.width / img.height || 1;
+          const canvasAspectRatio = width / height || 1;
+          if (imageAspectRatio > canvasAspectRatio) {
+            w = width;
+            h = width / imageAspectRatio;
+            x = 0;
+            y = (height - h) / 2;
+          } else {
+            h = height;
+            w = height * imageAspectRatio;
+            x = (width - w) / 2;
+            y = 0;
+          }
+        }
+        layerCtx.drawImage(img, x as number, y as number, w as number, h as number);
+      }
+    } else {
+      const dx = layer.offsetX ?? 0;
+      const dy = layer.offsetY ?? 0;
+      layerCtx.save();
+      if (dx !== 0 || dy !== 0) {
+        layerCtx.translate(dx, dy);
+      }
       for (const stroke of layer.strokes) {
         drawPathOnContext(layerCtx, stroke);
       }
+      layerCtx.restore();
     }
     ctx.drawImage(layerCanvas, 0, 0);
   }
@@ -168,12 +204,40 @@ export async function getCanvasScreenshotAsync(
       img.crossOrigin = "anonymous";
       img.src = layer.imageSrc;
       await img.decode().catch(() => undefined);
-      // Draw image stretched to requested output size; aspect-fit is handled in live canvas
-      layerCtx.drawImage(img, 0, 0, width, height);
+      let { x, y, width: w, height: h } = layer;
+      if (
+        typeof x !== "number" ||
+        typeof y !== "number" ||
+        typeof w !== "number" ||
+        typeof h !== "number"
+      ) {
+        // aspect-fit into provided width/height
+        const imageAspectRatio = img.width / img.height || 1;
+        const canvasAspectRatio = width / height || 1;
+        if (imageAspectRatio > canvasAspectRatio) {
+          w = width;
+          h = width / imageAspectRatio;
+          x = 0;
+          y = (height - h) / 2;
+        } else {
+          h = height;
+          w = height * imageAspectRatio;
+          x = (width - w) / 2;
+          y = 0;
+        }
+      }
+      layerCtx.drawImage(img, x as number, y as number, w as number, h as number);
     } else {
+      const dx = layer.offsetX ?? 0;
+      const dy = layer.offsetY ?? 0;
+      layerCtx.save();
+      if (dx !== 0 || dy !== 0) {
+        layerCtx.translate(dx, dy);
+      }
       for (const stroke of layer.strokes) {
         drawPathOnContext(layerCtx, stroke);
       }
+      layerCtx.restore();
     }
     ctx.drawImage(layerCanvas, 0, 0);
   }
@@ -236,6 +300,36 @@ export function boardReducer(
       });
       return next;
     }
+    case "MOVE_LAYER": {
+      const next = {
+        ...state,
+        layers: state.layers.map((l) => {
+          if (l.id !== action.id) return l;
+          if (l.type === "vector") {
+            const ox = (l.offsetX ?? 0) + action.dx;
+            const oy = (l.offsetY ?? 0) + action.dy;
+            return { ...l, offsetX: ox, offsetY: oy } as VectorLayer;
+          }
+          const x = (l.x ?? 0) + action.dx;
+          const y = (l.y ?? 0) + action.dy;
+          return { ...l, x, y } as ImageLayer;
+        }),
+      };
+      log("MOVE_LAYER", { id: action.id, dx: action.dx, dy: action.dy });
+      return next;
+    }
+    case "SET_IMAGE_BOUNDS": {
+      const next = {
+        ...state,
+        layers: state.layers.map((l) =>
+          l.id === action.id && l.type === "image"
+            ? { ...l, x: action.x, y: action.y, width: action.width, height: action.height }
+            : l
+        ),
+      };
+      log("SET_IMAGE_BOUNDS", { id: action.id });
+      return next;
+    }
     case "REMOVE_LAYER": {
       const remaining = state.layers.filter((l) => l.id !== action.id);
       const nextLayers =
@@ -253,6 +347,30 @@ export function boardReducer(
           type: l.type,
           visible: l.visible,
         })),
+      });
+      return next;
+    }
+    case "REORDER_LAYERS": {
+      // action.order is bottom->top id order to match draw order
+      const idToLayer = new Map(state.layers.map((l) => [l.id, l] as const));
+      const ordered: Layer[] = [];
+      for (const id of action.order) {
+        const layer = idToLayer.get(id);
+        if (layer) {
+          ordered.push(layer);
+          idToLayer.delete(id);
+        }
+      }
+      // Append any layers not present in payload, preserving existing relative order
+      for (const l of state.layers) {
+        if (idToLayer.has(l.id)) {
+          ordered.push(l);
+        }
+      }
+      const next = { ...state, layers: ordered };
+      log("REORDER_LAYERS", {
+        order: ordered.map((l) => l.id),
+        active: next.activeLayerId,
       });
       return next;
     }

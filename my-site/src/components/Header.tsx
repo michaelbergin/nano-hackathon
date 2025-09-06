@@ -4,7 +4,7 @@ import type { JSX } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Menu, User, LogOut, Plus, FileText, FolderOpen } from "lucide-react";
+import { Menu, User, LogOut, Plus, FileText, FolderOpen, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -39,6 +39,33 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
   const [pendingName, setPendingName] = useState<string>(projectName ?? "");
   const [isSavingName, setIsSavingName] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [recentProjects, setRecentProjects] = useState<
+    Array<{ id: number; name: string; lastOpenedAt: number }>
+  >([]);
+
+  // LocalStorage helpers for recent projects
+  const RECENT_KEY = "recentProjects";
+  const loadRecents = useCallback((): Array<{
+    id: number;
+    name: string;
+    lastOpenedAt: number;
+  }> => {
+    try {
+      const raw = localStorage.getItem(RECENT_KEY);
+      const list = raw ? (JSON.parse(raw) as Array<{ id: number; name: string; lastOpenedAt: number }>) : [];
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const saveRecents = useCallback((list: Array<{ id: number; name: string; lastOpenedAt: number }>): void => {
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+    } catch {
+      // ignore write errors
+    }
+  }, []);
 
   const handleCreateUntitled = useCallback((): void => {
     router.push("/new");
@@ -55,6 +82,27 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
     // Keep local state in sync if prop changes due to navigation
     setPendingName(projectName ?? "");
   }, [projectName]);
+
+  // Load recent projects on mount so they show in nav even when not on a project page
+  useEffect((): void => {
+    const list = loadRecents()
+      .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)
+      .slice(0, 5);
+    setRecentProjects(list);
+  }, [loadRecents]);
+
+  // When viewing a project, add/update it in recents with latest timestamp
+  useEffect((): void => {
+    if (!projectId || !projectName) return;
+    const now = Date.now();
+    const current = loadRecents();
+    const without = current.filter((p) => p.id !== projectId);
+    const updated = [{ id: projectId, name: projectName, lastOpenedAt: now }, ...without]
+      .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)
+      .slice(0, 10);
+    saveRecents(updated);
+    setRecentProjects(updated.slice(0, 5));
+  }, [projectId, projectName, loadRecents, saveRecents]);
 
   const startEditingName = useCallback((): void => {
     if (!projectId) {
@@ -155,6 +203,25 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
                 Projects
               </Button>
             </Link>
+            {/* Divider after Projects */}
+            <div className="h-px bg-border my-2" />
+            {/* Recent Projects */}
+            {recentProjects.length > 0 ? (
+              <div className="space-y-1">
+                <div className="px-2 text-xs font-medium text-muted-foreground flex items-center gap-2">
+                  <Clock className="h-3.5 w-3.5" /> Recent projects
+                </div>
+                {recentProjects.map((p) => (
+                  <Link key={p.id} href={`/projects/${p.id}`}>
+                    <Button variant="ghost" className="w-full justify-start truncate" title={p.name}>
+                      <span className="truncate">{p.name}</span>
+                    </Button>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="px-2 text-xs text-muted-foreground">No recent projects</div>
+            )}
           </nav>
         </SheetContent>
       </Sheet>

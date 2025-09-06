@@ -160,6 +160,14 @@ All components are now production-ready with best-in-class UX and developer expe
 - Strokes: Each stroke is a polyline with `{ points: number[], color: string, size: number, erase: boolean }`.
 - State management: A reducer manages actions for adding/removing/selecting layers, toggling visibility, renaming, clearing, and adding strokes to the active layer.
 
+#### Drag-and-Drop Layer Reordering — NEW
+
+- UI: Layers card supports drag-and-drop reordering using dnd-kit.
+- Order semantics: The UI shows the top-most layer at the top of the list. Dragging changes the visual order to match canvas rendering.
+- Rendering: Canvas draws from bottom to top; the reducer stores layers in bottom→top order internally.
+- New action: `REORDER_LAYERS` updates the reducer with the new order while preserving unknown ids safely.
+- Adding layers: New vector/image layers are added to the top of the stack and appear at the top of the list.
+
 ### Persistence
 
 - Serialization: Canvas data is saved as `{ layers: Layer[] }` to `Project.data`.

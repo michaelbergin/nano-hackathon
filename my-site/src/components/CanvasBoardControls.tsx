@@ -1,8 +1,24 @@
 "use client";
 
-import type { JSX, ChangeEvent, RefObject } from "react";
-import { memo } from "react";
+import type { JSX, ChangeEvent, RefObject, CSSProperties } from "react";
+import { memo, useMemo } from "react";
 import type { BoardMode, Layer, ImageLayer } from "./CanvasBoard";
+import type { DragEndEvent } from "@dnd-kit/core";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Pencil,
   Eraser,
@@ -20,6 +36,8 @@ import {
   Layers,
   Settings,
   Image as ImageIcon,
+  Move as MoveIcon,
+  GripVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +61,7 @@ export type CanvasControlsActions = {
   removeLayer: (id: string) => void;
   selectLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
+  reorderLayers: (orderTopToBottom: string[]) => void;
   setMode: (mode: BoardMode) => void;
   setColor: (color: string) => void;
   setBrushSize: (size: number) => void;
@@ -69,6 +88,31 @@ function CanvasBoardControlsBase({
   const drawActive = state.mode === "draw";
   const activeLayerId = state.activeLayerId;
 
+  // Display top-most layer first in UI (top -> bottom)
+  const layersTopToBottom = useMemo(() => {
+    return [...state.layers].reverse();
+  }, [state.layers]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor)
+  );
+
+  const onDragEnd = (event: DragEndEvent): void => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) {
+      return;
+    }
+    const ids = layersTopToBottom.map((l) => l.id);
+    const oldIndex = ids.indexOf(String(active.id));
+    const newIndex = ids.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+    const nextIds = arrayMove(ids, oldIndex, newIndex);
+    actions.reorderLayers(nextIds);
+  };
+
   return (
     <>
       {/* Left column: Tools, Actions, Preview */}
@@ -84,7 +128,7 @@ function CanvasBoardControlsBase({
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Mode Selection */}
-              <div className="flex gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <Button
                   variant={drawActive ? "default" : "outline"}
                   size="sm"
@@ -95,13 +139,22 @@ function CanvasBoardControlsBase({
                   Draw
                 </Button>
                 <Button
-                  variant={!drawActive ? "default" : "outline"}
+                  variant={state.mode === "erase" ? "default" : "outline"}
                   size="sm"
                   onClick={() => actions.setMode("erase")}
                   className="flex-1"
                 >
                   <Eraser className="h-4 w-4 mr-2" />
                   Erase
+                </Button>
+                <Button
+                  variant={state.mode === "move" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => actions.setMode("move")}
+                  className="flex-1"
+                >
+                  <MoveIcon className="h-4 w-4 mr-2" />
+                  Move
                 </Button>
               </div>
 
@@ -251,70 +304,30 @@ function CanvasBoardControlsBase({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="max-h-[calc(100vh-12rem)] overflow-y-auto space-y-2">
-                {state.layers.map((layer) => {
-                  const isActive = layer.id === activeLayerId;
-                  return (
-                    <div
-                      key={layer.id}
-                      className={`flex items-center gap-2 p-2 rounded-md border transition-colors ${
-                        isActive
-                          ? "bg-primary/10 border-primary/20"
-                          : "bg-muted/50 hover:bg-muted"
-                      }`}
-                    >
-                      <Button
-                        variant={isActive ? "default" : "ghost"}
-                        size="sm"
-                        onClick={() => actions.selectLayer(layer.id)}
-                        className="flex-1 justify-start text-left h-8 px-2"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div
-                            className={`w-2 h-2 rounded-full ${
-                              isActive
-                                ? "bg-primary-foreground"
-                                : "bg-muted-foreground"
-                            }`}
-                          />
-                          <span className="truncate text-sm">{layer.name}</span>
-                          {layer.type === "image" && (
-                            <ImageIcon className="h-3 w-3 text-blue-500 flex-shrink-0" />
-                          )}
-                          {(layer as ImageLayer).banana && (
-                            <Banana className="h-3 w-3 text-yellow-500 flex-shrink-0" />
-                          )}
-                        </div>
-                      </Button>
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => actions.toggleLayerVisibility(layer.id)}
-                        className="h-8 w-8 p-0"
-                        title={layer.visible ? "Hide layer" : "Show layer"}
-                      >
-                        {layer.visible ? (
-                          <Eye className="h-3 w-3" />
-                        ) : (
-                          <EyeOff className="h-3 w-3" />
-                        )}
-                      </Button>
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => actions.removeLayer(layer.id)}
-                        disabled={state.layers.length <= 1}
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                        title="Delete layer"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                <SortableContext
+                  items={layersTopToBottom.map((l) => l.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="max-h-[calc(100vh-12rem)] overflow-y-auto space-y-2">
+                    {layersTopToBottom.map((layer) => {
+                      const isActive = layer.id === activeLayerId;
+                      return (
+                        <SortableLayerRow
+                          key={layer.id}
+                          id={layer.id}
+                          isActive={isActive}
+                          layer={layer}
+                          onSelect={actions.selectLayer}
+                          onToggleVisibility={actions.toggleLayerVisibility}
+                          onRemove={actions.removeLayer}
+                          canRemove={state.layers.length > 1}
+                        />
+                      );
+                    })}
+                  </div>
+                </SortableContext>
+              </DndContext>
 
               <Button
                 variant="outline"
@@ -375,3 +388,92 @@ function CanvasBoardControlsBase({
 
 const CanvasBoardControls = memo(CanvasBoardControlsBase);
 export default CanvasBoardControls;
+
+interface SortableLayerRowProps {
+  id: string;
+  isActive: boolean;
+  layer: Layer;
+  onSelect: (id: string) => void;
+  onToggleVisibility: (id: string) => void;
+  onRemove: (id: string) => void;
+  canRemove: boolean;
+}
+
+function SortableLayerRow({
+  id,
+  isActive,
+  layer,
+  onSelect,
+  onToggleVisibility,
+  onRemove,
+  canRemove,
+}: SortableLayerRowProps): JSX.Element {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-2 p-2 rounded-md border transition-colors ${
+        isActive ? "bg-primary/10 border-primary/20" : "bg-muted/50 hover:bg-muted"
+      } ${isDragging ? "opacity-75" : ""}`}
+    >
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 w-8 p-0 cursor-grab active:cursor-grabbing"
+        title="Drag to reorder"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-3 w-3" />
+      </Button>
+
+      <Button
+        variant={isActive ? "default" : "ghost"}
+        size="sm"
+        onClick={() => onSelect(id)}
+        className="flex-1 justify-start text-left h-8 px-2"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <div
+            className={`w-2 h-2 rounded-full ${
+              isActive ? "bg-primary-foreground" : "bg-muted-foreground"
+            }`}
+          />
+          <span className="truncate text-sm">{layer.name}</span>
+          {layer.type === "image" && (
+            <ImageIcon className="h-3 w-3 text-blue-500 flex-shrink-0" />
+          )}
+          {(layer as ImageLayer).banana && (
+            <Banana className="h-3 w-3 text-yellow-500 flex-shrink-0" />
+          )}
+        </div>
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => onToggleVisibility(id)}
+        className="h-8 w-8 p-0"
+        title={layer.visible ? "Hide layer" : "Show layer"}
+      >
+        {layer.visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => onRemove(id)}
+        disabled={!canRemove}
+        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+        title="Delete layer"
+      >
+        <X className="h-3 w-3" />
+      </Button>
+    </div>
+  );
+}

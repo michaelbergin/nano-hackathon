@@ -30,17 +30,25 @@ export type BaseLayer = {
 export type VectorLayer = BaseLayer & {
   type: "vector";
   strokes: PathStroke[];
+  // optional offset in CSS pixels; defaults to 0 when undefined
+  offsetX?: number;
+  offsetY?: number;
 };
 
 export type ImageLayer = BaseLayer & {
   type: "image";
   imageSrc: string;
   banana?: boolean;
+  // optional placement rect in CSS pixels; if missing, image is aspect-fit
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
 };
 
 export type Layer = VectorLayer | ImageLayer;
 
-export type BoardMode = "draw" | "erase";
+export type BoardMode = "draw" | "erase" | "move";
 
 export type BoardState = {
   layers: Layer[];
@@ -57,12 +65,22 @@ export type BoardAction =
   | { type: "SELECT_LAYER"; id: string }
   | { type: "TOGGLE_LAYER_VISIBILITY"; id: string }
   | { type: "RENAME_LAYER"; id: string; name: string }
+  | { type: "REORDER_LAYERS"; order: string[] }
   | { type: "ADD_STROKE_TO_ACTIVE"; stroke: PathStroke }
   | {
       type: "ADD_IMAGE_LAYER_TOP";
       name?: string;
       imageSrc: string;
       banana?: boolean;
+    }
+  | { type: "MOVE_LAYER"; id: string; dx: number; dy: number }
+  | {
+      type: "SET_IMAGE_BOUNDS";
+      id: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
     }
   | { type: "ENSURE_ACTIVE_VECTOR_LAYER" }
   | { type: "CLEAR_ACTIVE_LAYER" }
@@ -94,6 +112,14 @@ export function CanvasBoard({
 
   const isDrawingRef = useRef<boolean>(false);
   const currentPathRef = useRef<PathStroke | null>(null);
+  const isDraggingRef = useRef<boolean>(false);
+  const dragInfoRef = useRef<{
+    id: string;
+    lastX: number;
+    lastY: number;
+    axis?: "x" | "y";
+  } | null>(null);
+  const [isDraggingUi, setIsDraggingUi] = useState<boolean>(false);
 
   const [state, dispatch] = useReducer(boardReducer, {
     layers: [createLayer("Layer 1")],
@@ -152,24 +178,42 @@ export function CanvasBoard({
                 (obj as ImageLayer).type === "image" &&
                 typeof (obj as ImageLayer).imageSrc === "string"
               ) {
+                const imgObj = obj as ImageLayer;
                 return {
                   id,
                   name,
                   visible,
                   type: "image",
-                  imageSrc: (obj as ImageLayer).imageSrc,
-                  banana: (obj as ImageLayer).banana ?? false,
+                  imageSrc: imgObj.imageSrc,
+                  banana: imgObj.banana ?? false,
+                  x: typeof imgObj.x === "number" ? imgObj.x : undefined,
+                  y: typeof imgObj.y === "number" ? imgObj.y : undefined,
+                  width:
+                    typeof imgObj.width === "number" ? imgObj.width : undefined,
+                  height:
+                    typeof imgObj.height === "number"
+                      ? imgObj.height
+                      : undefined,
                 } as ImageLayer;
               }
               const strokes = Array.isArray((obj as VectorLayer).strokes)
                 ? ((obj as VectorLayer).strokes as PathStroke[])
                 : [];
+              const vecObj = obj as VectorLayer;
               return {
                 id,
                 name,
                 visible,
                 type: "vector",
                 strokes,
+                offsetX:
+                  typeof vecObj.offsetX === "number"
+                    ? vecObj.offsetX
+                    : undefined,
+                offsetY:
+                  typeof vecObj.offsetY === "number"
+                    ? vecObj.offsetY
+                    : undefined,
               } as VectorLayer;
             })
             .filter((x): x is Layer => x !== null);
@@ -194,6 +238,115 @@ export function CanvasBoard({
       // ignore
     }
   }, [state.layers, onSave]);
+
+  const getCssSize = useCallback((): { cssW: number; cssH: number } => {
+    const ctx = ctxRef.current;
+    const canvas = canvasRef.current;
+    if (!ctx || !canvas) return { cssW: 0, cssH: 0 };
+    const m = ctx.getTransform();
+    const scaleX = m.a || 1;
+    const scaleY = m.d || 1;
+    const cssW = canvas.width / scaleX;
+    const cssH = canvas.height / scaleY;
+    return { cssW, cssH };
+  }, []);
+
+  // Compute bounding rect for a layer, using image cache for accurate aspect-fit when needed
+  const getLayerBoundingRect = useCallback(
+    (
+      layer: Layer
+    ): { x: number; y: number; width: number; height: number } | null => {
+      const { cssW, cssH } = getCssSize();
+      if (cssW === 0 || cssH === 0) return null;
+      if (layer.type === "image") {
+        let { x, y, width, height } = layer;
+        if (
+          typeof x === "number" &&
+          typeof y === "number" &&
+          typeof width === "number" &&
+          typeof height === "number"
+        ) {
+          return { x, y, width, height };
+        }
+        const cached = imageCacheRef.current.get(layer.imageSrc) ?? null;
+        if (cached) {
+          const imageAspectRatio = cached.width / cached.height;
+          const canvasAspectRatio = cssW / cssH;
+          if (imageAspectRatio > canvasAspectRatio) {
+            width = cssW;
+            height = cssW / imageAspectRatio;
+            x = 0;
+            y = (cssH - height) / 2;
+          } else {
+            height = cssH;
+            width = cssH * imageAspectRatio;
+            x = (cssW - width) / 2;
+            y = 0;
+          }
+          return { x, y, width, height };
+        }
+        // Fallback: assume full canvas until image loads
+        return { x: 0, y: 0, width: cssW, height: cssH };
+      }
+      if (layer.strokes.length === 0) return null;
+      let minX = Number.POSITIVE_INFINITY;
+      let minY = Number.POSITIVE_INFINITY;
+      let maxX = Number.NEGATIVE_INFINITY;
+      let maxY = Number.NEGATIVE_INFINITY;
+      let maxSize = 1;
+      for (const s of layer.strokes) {
+        maxSize = Math.max(maxSize, s.size);
+        const pts = s.points;
+        for (let i = 0; i < pts.length; i += 2) {
+          const x = pts[i];
+          const y = pts[i + 1];
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+        }
+      }
+      if (
+        !isFinite(minX) ||
+        !isFinite(minY) ||
+        !isFinite(maxX) ||
+        !isFinite(maxY)
+      ) {
+        return null;
+      }
+      const dx = layer.offsetX ?? 0;
+      const dy = layer.offsetY ?? 0;
+      const pad = Math.max(4, maxSize / 2 + 2);
+      return {
+        x: minX + dx - pad,
+        y: minY + dy - pad,
+        width: maxX - minX + pad * 2,
+        height: maxY - minY + pad * 2,
+      };
+    },
+    [getCssSize]
+  );
+
+  const hitTestLayers = useCallback(
+    (x: number, y: number): number => {
+      for (let i = state.layers.length - 1; i >= 0; i--) {
+        const l = state.layers[i];
+        if (!l.visible) continue;
+        const rect = getLayerBoundingRect(l);
+        if (!rect) continue;
+        if (
+          x >= rect.x &&
+          x <= rect.x + rect.width &&
+          y >= rect.y &&
+          y <= rect.y + rect.height
+        ) {
+          return i;
+        }
+      }
+      return -1;
+    },
+    [state.layers, getLayerBoundingRect]
+  );
 
   const drawAll = useCallback((): void => {
     const ctx = ctxRef.current;
@@ -264,42 +417,104 @@ export function CanvasBoard({
         const cached = imageCacheRef.current.get(layer.imageSrc) ?? null;
         if (cached) {
           const imageAspectRatio = cached.width / cached.height;
-          const canvasAspectRatio = cssW / cssH;
-
-          let drawWidth: number;
-          let drawHeight: number;
-          let drawX: number;
-          let drawY: number;
-
-          if (imageAspectRatio > canvasAspectRatio) {
-            drawWidth = cssW;
-            drawHeight = cssW / imageAspectRatio;
-            drawX = 0;
-            drawY = (cssH - drawHeight) / 2;
-          } else {
-            drawHeight = cssH;
-            drawWidth = cssH * imageAspectRatio;
-            drawX = (cssW - drawWidth) / 2;
-            drawY = 0;
+          // Use explicit bounds if present; else aspect-fit
+          let { x, y, width, height } = layer;
+          if (
+            typeof x !== "number" ||
+            typeof y !== "number" ||
+            typeof width !== "number" ||
+            typeof height !== "number"
+          ) {
+            const canvasAspectRatio = cssW / cssH;
+            if (imageAspectRatio > canvasAspectRatio) {
+              width = cssW;
+              height = cssW / imageAspectRatio;
+              x = 0;
+              y = (cssH - height) / 2;
+            } else {
+              height = cssH;
+              width = cssH * imageAspectRatio;
+              x = (cssW - width) / 2;
+              y = 0;
+            }
           }
-
-          octx.drawImage(cached, drawX, drawY, drawWidth, drawHeight);
+          octx.drawImage(
+            cached,
+            x as number,
+            y as number,
+            width as number,
+            height as number
+          );
         }
       } else {
+        const dx = layer.offsetX ?? 0;
+        const dy = layer.offsetY ?? 0;
+        octx.save();
+        if (dx !== 0 || dy !== 0) {
+          octx.translate(dx, dy);
+        }
         for (const s of layer.strokes) {
           drawPathOnContext(octx, s);
         }
-        // Draw in-progress stroke only on the active vector layer
+        // Draw in-progress stroke only on the active vector layer;
+        // adjust for offset so the stroke aligns with the pointer
         const current = currentPathRef.current;
         if (current && layer.id === state.activeLayerId) {
-          drawPathOnContext(octx, current);
+          const adx = layer.offsetX ?? 0;
+          const ady = layer.offsetY ?? 0;
+          if (adx !== 0 || ady !== 0) {
+            const pts = current.points;
+            const adj: number[] = new Array(pts.length);
+            for (let i = 0; i < pts.length; i += 2) {
+              adj[i] = pts[i] - adx;
+              adj[i + 1] = pts[i + 1] - ady;
+            }
+            drawPathOnContext(octx, { ...current, points: adj });
+          } else {
+            drawPathOnContext(octx, current);
+          }
         }
+        octx.restore();
       }
 
       // Composite this layer onto the main canvas using CSS pixel destination size
       ctx.drawImage(off, 0, 0, off.width, off.height, 0, 0, cssW, cssH);
     }
-  }, [state.layers, state.activeLayerId]);
+    // Selection overlay
+    const active = state.layers.find((l) => l.id === state.activeLayerId);
+    if (state.mode === "move" && active && active.visible) {
+      const rect = getLayerBoundingRect(active);
+      if (rect) {
+        ctx.save();
+        ctx.lineWidth = 1;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = "#3b82f680"; // semi-transparent sky-500
+        ctx.fillStyle = "#3b82f61a"; // very light fill
+        const { x, y, width, height } = rect;
+        ctx.fillRect(x, y, width, height);
+        ctx.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1);
+        // handles
+        const handle = 6;
+        const half = handle / 2;
+        const corners: [number, number][] = [
+          [x, y],
+          [x + width, y],
+          [x, y + height],
+          [x + width, y + height],
+        ];
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = "#2563eb"; // blue-600
+        for (const [cx, cy] of corners) {
+          ctx.beginPath();
+          ctx.rect(cx - half, cy - half, handle, handle);
+          ctx.fill();
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+  }, [state.layers, state.activeLayerId, state.mode, getLayerBoundingRect]);
 
   const resizeCanvas = useCallback((): void => {
     const canvas = canvasRef.current;
@@ -405,24 +620,86 @@ export function CanvasBoard({
         return;
       }
       (evt.target as Element).setPointerCapture?.(evt.pointerId);
-      // Ensure we always draw on a vector layer (auto-create one if active is image)
-      dispatch({ type: "ENSURE_ACTIVE_VECTOR_LAYER" });
-      isDrawingRef.current = true;
       const [x, y] = getRelativePoint(evt);
-      const start: PathStroke = {
-        points: [x, y, x, y],
-        color: state.strokeColor,
-        size: state.brushSize,
-        erase: state.mode === "erase",
-      };
-      currentPathRef.current = start;
-      drawAll();
+      if (state.mode === "move") {
+        const idx = hitTestLayers(x, y);
+        if (idx >= 0) {
+          const hit = state.layers[idx];
+          dispatch({ type: "SELECT_LAYER", id: hit.id });
+          if (hit.type === "image") {
+            const rect = getLayerBoundingRect(hit);
+            if (rect) {
+              dispatch({
+                type: "SET_IMAGE_BOUNDS",
+                id: hit.id,
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+              });
+            }
+          }
+          isDraggingRef.current = true;
+          setIsDraggingUi(true);
+          dragInfoRef.current = { id: hit.id, lastX: x, lastY: y };
+        }
+      } else {
+        // Ensure we always draw on a vector layer (auto-create one if active is image)
+        dispatch({ type: "ENSURE_ACTIVE_VECTOR_LAYER" });
+        isDrawingRef.current = true;
+        const start: PathStroke = {
+          points: [x, y, x, y],
+          color: state.strokeColor,
+          size: state.brushSize,
+          erase: state.mode === "erase",
+        };
+        currentPathRef.current = start;
+        drawAll();
+      }
     },
-    [getRelativePoint, drawAll, state.strokeColor, state.brushSize, state.mode]
+    [
+      getRelativePoint,
+      drawAll,
+      state.strokeColor,
+      state.brushSize,
+      state.mode,
+      hitTestLayers,
+      getLayerBoundingRect,
+      state.layers,
+    ]
   );
 
   const onPointerMove = useCallback(
     (evt: PointerEvent): void => {
+      if (state.mode === "move") {
+        const drag = dragInfoRef.current;
+        if (!drag || !isDraggingRef.current) {
+          return;
+        }
+        if (!evt.isPrimary) {
+          return;
+        }
+        const [x, y] = getRelativePoint(evt);
+        let dx = x - drag.lastX;
+        let dy = y - drag.lastY;
+        // axis lock with Shift
+        if (evt.shiftKey) {
+          if (!drag.axis) {
+            drag.axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
+          }
+          if (drag.axis === "x") dy = 0;
+          else dx = 0;
+        } else {
+          drag.axis = undefined;
+        }
+        if (dx !== 0 || dy !== 0) {
+          dispatch({ type: "MOVE_LAYER", id: drag.id, dx, dy });
+          drag.lastX = x;
+          drag.lastY = y;
+          drawAll();
+        }
+        return;
+      }
       if (!isDrawingRef.current) {
         return;
       }
@@ -449,24 +726,49 @@ export function CanvasBoard({
       }
       drawAll();
     },
-    [getRelativePoint, drawAll]
+    [getRelativePoint, drawAll, state.mode]
   );
 
-  const onPointerUp = useCallback((evt: PointerEvent): void => {
-    if (!isDrawingRef.current) {
-      return;
-    }
-    (evt.target as Element).releasePointerCapture?.(evt.pointerId);
-    isDrawingRef.current = false;
-    const finished = currentPathRef.current;
-    currentPathRef.current = null;
-    if (finished && finished.points.length >= 4) {
-      dispatch({
-        type: "ADD_STROKE_TO_ACTIVE",
-        stroke: { ...finished, points: [...finished.points] },
-      });
-    }
-  }, []);
+  const onPointerUp = useCallback(
+    (evt: PointerEvent): void => {
+      (evt.target as Element).releasePointerCapture?.(evt.pointerId);
+      if (state.mode === "move") {
+        isDraggingRef.current = false;
+        dragInfoRef.current = null;
+        setIsDraggingUi(false);
+        return;
+      }
+      if (!isDrawingRef.current) {
+        return;
+      }
+      isDrawingRef.current = false;
+      const finished = currentPathRef.current;
+      currentPathRef.current = null;
+      if (finished && finished.points.length >= 4) {
+        // If active layer has an offset, store points in local coordinates
+        const active = state.layers.find((l) => l.id === state.activeLayerId);
+        let toStore = finished.points;
+        if (active && active.type === "vector") {
+          const adx = active.offsetX ?? 0;
+          const ady = active.offsetY ?? 0;
+          if (adx !== 0 || ady !== 0) {
+            const pts = finished.points;
+            const adj: number[] = new Array(pts.length);
+            for (let i = 0; i < pts.length; i += 2) {
+              adj[i] = pts[i] - adx;
+              adj[i + 1] = pts[i + 1] - ady;
+            }
+            toStore = adj;
+          }
+        }
+        dispatch({
+          type: "ADD_STROKE_TO_ACTIVE",
+          stroke: { ...finished, points: [...toStore] },
+        });
+      }
+    },
+    [state.mode, state.activeLayerId, state.layers]
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -479,8 +781,14 @@ export function CanvasBoard({
     const cancel = (e: Event): void => {
       const evt = e as PointerEvent;
       (evt.target as Element | null)?.releasePointerCapture?.(evt.pointerId);
-      isDrawingRef.current = false;
-      currentPathRef.current = null;
+      if (state.mode === "move") {
+        isDraggingRef.current = false;
+        dragInfoRef.current = null;
+        setIsDraggingUi(false);
+      } else {
+        isDrawingRef.current = false;
+        currentPathRef.current = null;
+      }
     };
     const lostCapture = (e: Event): void => onPointerUp(e as PointerEvent);
     const preventContext = (e: Event): void => {
@@ -492,6 +800,23 @@ export function CanvasBoard({
     window.addEventListener("pointercancel", cancel, { passive: false });
     canvas.addEventListener("lostpointercapture", lostCapture);
     canvas.addEventListener("contextmenu", preventContext, { passive: false });
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (state.mode !== "move") return;
+      const active = state.layers.find((l) => l.id === state.activeLayerId);
+      if (!active) return;
+      const step = e.shiftKey ? 10 : 1;
+      let dx = 0;
+      let dy = 0;
+      if (e.key === "ArrowLeft") dx = -step;
+      else if (e.key === "ArrowRight") dx = step;
+      else if (e.key === "ArrowUp") dy = -step;
+      else if (e.key === "ArrowDown") dy = step;
+      else return;
+      e.preventDefault();
+      dispatch({ type: "MOVE_LAYER", id: active.id, dx, dy });
+      drawAll();
+    };
+    window.addEventListener("keydown", onKeyDown);
     return () => {
       canvas.removeEventListener("pointerdown", down);
       window.removeEventListener("pointermove", move);
@@ -499,8 +824,17 @@ export function CanvasBoard({
       window.removeEventListener("pointercancel", cancel);
       canvas.removeEventListener("lostpointercapture", lostCapture);
       canvas.removeEventListener("contextmenu", preventContext);
+      window.removeEventListener("keydown", onKeyDown);
     };
-  }, [onPointerDown, onPointerMove, onPointerUp]);
+  }, [
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    state.mode,
+    state.layers,
+    state.activeLayerId,
+    drawAll,
+  ]);
 
   // UI state for controls
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -723,6 +1057,12 @@ export function CanvasBoard({
     selectLayer: (id: string) => dispatch({ type: "SELECT_LAYER", id }),
     toggleLayerVisibility: (id: string) =>
       dispatch({ type: "TOGGLE_LAYER_VISIBILITY", id }),
+    reorderLayers: (orderTopToBottom: string[]) => {
+      // internal reducer expects bottom->top order
+      const bottomToTop = [...orderTopToBottom].reverse();
+      dispatch({ type: "REORDER_LAYERS", order: bottomToTop });
+      drawAll();
+    },
     setMode: (mode: BoardMode) => dispatch({ type: "SET_MODE", mode }),
     setColor: (color: string) => dispatch({ type: "SET_COLOR", color }),
     setBrushSize: (size: number) => dispatch({ type: "SET_BRUSH_SIZE", size }),
@@ -740,7 +1080,13 @@ export function CanvasBoard({
       <div ref={containerRef} className="absolute inset-0">
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 w-full h-full cursor-crosshair select-none touch-none"
+          className={`absolute inset-0 w-full h-full select-none touch-none ${
+            state.mode === "move"
+              ? isDraggingUi
+                ? "cursor-grabbing"
+                : "cursor-grab"
+              : "cursor-crosshair"
+          }`}
         />
       </div>
 
