@@ -10,25 +10,37 @@ import {
   useState,
 } from "react";
 
-type Point2 = [number, number];
-type PolyLine2 = number[];
-type PathStroke = {
+export type Point2 = [number, number];
+export type PolyLine2 = number[];
+export type PathStroke = {
   points: PolyLine2;
   color: string;
   size: number;
   erase: boolean;
 };
 
-type Layer = {
+export type BaseLayer = {
   id: string;
   name: string;
   visible: boolean;
+};
+
+export type VectorLayer = BaseLayer & {
+  type: "vector";
   strokes: PathStroke[];
 };
 
-type BoardMode = "draw" | "erase";
+export type ImageLayer = BaseLayer & {
+  type: "image";
+  imageSrc: string;
+  banana?: boolean;
+};
 
-type BoardState = {
+export type Layer = VectorLayer | ImageLayer;
+
+export type BoardMode = "draw" | "erase";
+
+export type BoardState = {
   layers: Layer[];
   activeLayerId: string;
   mode: BoardMode;
@@ -37,13 +49,20 @@ type BoardState = {
   compositeDataUrl: string | null;
 };
 
-type BoardAction =
+export type BoardAction =
   | { type: "ADD_LAYER"; name?: string }
   | { type: "REMOVE_LAYER"; id: string }
   | { type: "SELECT_LAYER"; id: string }
   | { type: "TOGGLE_LAYER_VISIBILITY"; id: string }
   | { type: "RENAME_LAYER"; id: string; name: string }
   | { type: "ADD_STROKE_TO_ACTIVE"; stroke: PathStroke }
+  | {
+      type: "ADD_IMAGE_LAYER_TOP";
+      name?: string;
+      imageSrc: string;
+      banana?: boolean;
+    }
+  | { type: "ENSURE_ACTIVE_VECTOR_LAYER" }
   | { type: "CLEAR_ACTIVE_LAYER" }
   | { type: "CLEAR_ALL_LAYERS" }
   | { type: "SET_MODE"; mode: BoardMode }
@@ -63,11 +82,12 @@ function generateLayerId(): string {
     .slice(2, 8)}`;
 }
 
-function createLayer(name: string): Layer {
+export function createLayer(name: string): VectorLayer {
   return {
     id: generateLayerId(),
     name,
     visible: true,
+    type: "vector",
     strokes: [],
   };
 }
@@ -80,47 +100,115 @@ function ensureActiveLayerId(layers: Layer[], currentId: string): string {
   return layers.length > 0 ? layers[0].id : generateLayerId();
 }
 
-function boardReducer(state: BoardState, action: BoardAction): BoardState {
+/**
+ * Reducer for canvas board state. Logs key transitions to aid debugging.
+ */
+export function boardReducer(
+  state: BoardState,
+  action: BoardAction
+): BoardState {
+  const log = (message: string, extra?: unknown): void => {
+    if (typeof window !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.debug(`[CanvasBoard] ${message}`, extra ?? "");
+    }
+  };
   switch (action.type) {
     case "ADD_LAYER": {
       const name = action.name ?? `Layer ${state.layers.length + 1}`;
       const nextLayer = createLayer(name);
-      return {
+      const next = {
         ...state,
         layers: [...state.layers, nextLayer],
         activeLayerId: nextLayer.id,
       };
+      log("ADD_LAYER", {
+        active: next.activeLayerId,
+        layers: next.layers.map((l) => ({
+          id: l.id,
+          type: l.type,
+          visible: l.visible,
+        })),
+      });
+      return next;
+    }
+    case "ADD_IMAGE_LAYER_TOP": {
+      const name = action.name ?? `Layer ${state.layers.length + 1}`;
+      const imageLayer: ImageLayer = {
+        id: generateLayerId(),
+        name,
+        visible: true,
+        type: "image",
+        imageSrc: action.imageSrc,
+        banana: action.banana ?? false,
+      };
+      const next = {
+        ...state,
+        layers: [...state.layers, imageLayer],
+        activeLayerId: imageLayer.id,
+      };
+      log("ADD_IMAGE_LAYER_TOP", {
+        active: next.activeLayerId,
+        layers: next.layers.map((l) => ({
+          id: l.id,
+          type: l.type,
+          visible: l.visible,
+        })),
+      });
+      return next;
     }
     case "REMOVE_LAYER": {
       const remaining = state.layers.filter((l) => l.id !== action.id);
-      const nextActive = ensureActiveLayerId(remaining, state.activeLayerId);
-      return {
-        ...state,
-        layers: remaining.length > 0 ? remaining : [createLayer("Layer 1")],
-        activeLayerId:
-          remaining.length > 0
-            ? nextActive
-            : remaining[0]?.id ?? state.activeLayerId,
-      };
+      const nextLayers =
+        remaining.length > 0 ? remaining : [createLayer("Layer 1")];
+      const nextActive = ensureActiveLayerId(
+        nextLayers,
+        state.activeLayerId === action.id ? "" : state.activeLayerId
+      );
+      const next = { ...state, layers: nextLayers, activeLayerId: nextActive };
+      log("REMOVE_LAYER", {
+        removed: action.id,
+        active: next.activeLayerId,
+        layers: next.layers.map((l) => ({
+          id: l.id,
+          type: l.type,
+          visible: l.visible,
+        })),
+      });
+      return next;
     }
     case "SELECT_LAYER": {
-      return { ...state, activeLayerId: action.id };
+      // Ensure selected layer is visible
+      const nextLayers = state.layers.map((l) =>
+        l.id === action.id ? { ...l, visible: true } : l
+      );
+      const next = { ...state, layers: nextLayers, activeLayerId: action.id };
+      log("SELECT_LAYER", { active: next.activeLayerId });
+      return next;
     }
     case "TOGGLE_LAYER_VISIBILITY": {
-      return {
+      const next = {
         ...state,
         layers: state.layers.map((l) =>
           l.id === action.id ? { ...l, visible: !l.visible } : l
         ),
       };
+      log("TOGGLE_LAYER_VISIBILITY", {
+        id: action.id,
+        nowVisible:
+          next.layers.find((l) => l.id === action.id)?.visible ?? false,
+      });
+      return next;
     }
     case "RENAME_LAYER": {
-      return {
+      const next = {
         ...state,
         layers: state.layers.map((l) =>
           l.id === action.id ? { ...l, name: action.name } : l
         ),
       };
+      log("RENAME_LAYER", { id: action.id, name: action.name });
+      return next;
     }
     case "ADD_STROKE_TO_ACTIVE": {
       const idx = state.layers.findIndex((l) => l.id === state.activeLayerId);
@@ -128,46 +216,97 @@ function boardReducer(state: BoardState, action: BoardAction): BoardState {
         return state;
       }
       const target = state.layers[idx];
-      const updated: Layer = {
+      if (target.type !== "vector") {
+        return state;
+      }
+      const updated: VectorLayer = {
         ...target,
         strokes: [...target.strokes, action.stroke],
       };
       const nextLayers = state.layers.slice();
       nextLayers[idx] = updated;
-      return { ...state, layers: nextLayers };
+      const next = { ...state, layers: nextLayers };
+      log("ADD_STROKE_TO_ACTIVE", {
+        active: next.activeLayerId,
+        strokePoints: action.stroke.points.length,
+      });
+      return next;
+    }
+    case "ENSURE_ACTIVE_VECTOR_LAYER": {
+      const currentIndex = state.layers.findIndex(
+        (l) => l.id === state.activeLayerId
+      );
+      const current =
+        currentIndex >= 0 ? state.layers[currentIndex] : undefined;
+      if (current && current.type === "vector") {
+        return state;
+      }
+      const nextLayer = createLayer(`Layer ${state.layers.length + 1}`);
+      const next = {
+        ...state,
+        layers: [...state.layers, nextLayer],
+        activeLayerId: nextLayer.id,
+      };
+      log("ENSURE_ACTIVE_VECTOR_LAYER", { active: next.activeLayerId });
+      return next;
     }
     case "CLEAR_ACTIVE_LAYER": {
-      const nextLayers = state.layers.map((l) =>
-        l.id === state.activeLayerId ? { ...l, strokes: [] } : l
-      );
-      return { ...state, layers: nextLayers };
+      const nextLayers = state.layers.map((l) => {
+        if (l.id !== state.activeLayerId) {
+          return l;
+        }
+        if (l.type === "vector") {
+          return { ...l, strokes: [] };
+        }
+        return l;
+      });
+      const next = { ...state, layers: nextLayers };
+      log("CLEAR_ACTIVE_LAYER", { active: next.activeLayerId });
+      return next;
     }
     case "CLEAR_ALL_LAYERS": {
-      return {
+      const next = {
         ...state,
-        layers: state.layers.map((l) => ({ ...l, strokes: [] })),
+        layers: state.layers.map((l) =>
+          l.type === "vector" ? { ...l, strokes: [] } : l
+        ),
       };
+      log("CLEAR_ALL_LAYERS");
+      return next;
     }
     case "SET_MODE": {
-      return { ...state, mode: action.mode };
+      const next = { ...state, mode: action.mode };
+      log("SET_MODE", { mode: next.mode });
+      return next;
     }
     case "SET_COLOR": {
-      return { ...state, strokeColor: action.color };
+      const next = { ...state, strokeColor: action.color };
+      log("SET_COLOR", { color: next.strokeColor });
+      return next;
     }
     case "SET_BRUSH_SIZE": {
-      return { ...state, brushSize: action.size };
+      const next = { ...state, brushSize: action.size };
+      log("SET_BRUSH_SIZE", { size: next.brushSize });
+      return next;
     }
     case "LOAD_FROM_DATA": {
       const layers =
         action.layers.length > 0 ? action.layers : [createLayer("Layer 1")];
-      return {
+      const next = {
         ...state,
         layers,
         activeLayerId: layers[0].id,
       };
+      log("LOAD_FROM_DATA", {
+        active: next.activeLayerId,
+        count: layers.length,
+      });
+      return next;
     }
     case "SET_COMPOSITE": {
-      return { ...state, compositeDataUrl: action.dataUrl };
+      const next = { ...state, compositeDataUrl: action.dataUrl };
+      log("SET_COMPOSITE", { hasData: Boolean(next.compositeDataUrl) });
+      return next;
     }
     default: {
       return state;
@@ -225,8 +364,52 @@ export function getCanvasScreenshot(
     if (!layer.visible) {
       continue;
     }
-    for (const stroke of layer.strokes) {
-      drawPathOnContext(ctx, stroke);
+    if (layer.type === "vector") {
+      for (const stroke of layer.strokes) {
+        drawPathOnContext(ctx, stroke);
+      }
+    }
+  }
+  return off.toDataURL("image/png");
+}
+
+async function getCanvasScreenshotAsync(
+  layers: Layer[],
+  width: number,
+  height: number,
+  dprInput?: number
+): Promise<string> {
+  const dpr = Math.max(
+    1,
+    Math.floor(
+      dprInput ??
+        (typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1)
+    )
+  );
+  const off = document.createElement("canvas");
+  off.width = Math.max(1, Math.floor(width * dpr));
+  off.height = Math.max(1, Math.floor(height * dpr));
+  const ctx = off.getContext("2d");
+  if (!ctx) {
+    return "";
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  for (const layer of layers) {
+    if (!layer.visible) {
+      continue;
+    }
+    if (layer.type === "image") {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = layer.imageSrc;
+      await img.decode().catch(() => undefined);
+      ctx.drawImage(img, 0, 0, width, height);
+    } else {
+      for (const stroke of layer.strokes) {
+        drawPathOnContext(ctx, stroke);
+      }
     }
   }
   return off.toDataURL("image/png");
@@ -239,6 +422,7 @@ export function CanvasBoard({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
 
   const isDrawingRef = useRef<boolean>(false);
   const currentPathRef = useRef<PathStroke | null>(null);
@@ -280,19 +464,45 @@ export function CanvasBoard({
         if (Array.isArray(maybe)) {
           const layers: Layer[] = maybe
             .map((l) => {
-              const obj = l as Partial<Layer>;
+              const obj = l as Partial<
+                Layer & { type?: string; imageSrc?: string }
+              >;
               if (!obj || typeof obj !== "object") {
                 return null;
               }
               const id =
                 typeof obj.id === "string" ? obj.id : generateLayerId();
-              const name = typeof obj.name === "string" ? obj.name : "Layer";
+              const name =
+                typeof (obj as BaseLayer).name === "string"
+                  ? (obj as BaseLayer).name
+                  : "Layer";
               const visible =
-                typeof obj.visible === "boolean" ? obj.visible : true;
-              const strokes = Array.isArray(obj.strokes)
-                ? (obj.strokes as PathStroke[])
+                typeof (obj as BaseLayer).visible === "boolean"
+                  ? (obj as BaseLayer).visible
+                  : true;
+              if (
+                (obj as ImageLayer).type === "image" &&
+                typeof (obj as ImageLayer).imageSrc === "string"
+              ) {
+                return {
+                  id,
+                  name,
+                  visible,
+                  type: "image",
+                  imageSrc: (obj as ImageLayer).imageSrc,
+                  banana: (obj as ImageLayer).banana ?? false,
+                } as ImageLayer;
+              }
+              const strokes = Array.isArray((obj as VectorLayer).strokes)
+                ? ((obj as VectorLayer).strokes as PathStroke[])
                 : [];
-              return { id, name, visible, strokes } as Layer;
+              return {
+                id,
+                name,
+                visible,
+                type: "vector",
+                strokes,
+              } as VectorLayer;
             })
             .filter((x): x is Layer => x !== null);
           dispatch({ type: "LOAD_FROM_DATA", layers });
@@ -336,8 +546,15 @@ export function CanvasBoard({
       if (!layer.visible) {
         continue;
       }
-      for (const s of layer.strokes) {
-        drawPath(s);
+      if (layer.type === "image") {
+        const cached = imageCacheRef.current.get(layer.imageSrc) ?? null;
+        if (cached) {
+          ctx.drawImage(cached, 0, 0, canvas.width, canvas.height);
+        }
+      } else {
+        for (const s of layer.strokes) {
+          drawPath(s);
+        }
       }
     }
     const current = currentPathRef.current;
@@ -377,6 +594,26 @@ export function CanvasBoard({
     return () => window.removeEventListener("resize", resizeCanvas);
   }, [resizeCanvas]);
 
+  // Ensure an image is loaded and cached. Triggers redraw on load.
+  const ensureImageLoaded = useCallback(
+    (src: string): void => {
+      if (imageCacheRef.current.has(src)) {
+        return;
+      }
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        imageCacheRef.current.set(src, img);
+        drawAll();
+      };
+      img.onerror = () => {
+        // Do not retry automatically; leave uncached on error
+      };
+      img.src = src;
+    },
+    [drawAll]
+  );
+
   const getRelativePoint = useCallback((evt: PointerEvent): Point2 => {
     const canvas = canvasRef.current;
     if (!canvas) {
@@ -392,12 +629,23 @@ export function CanvasBoard({
     drawAll();
   }, [state.layers, drawAll]);
 
+  // Preload images for visible image layers so they persist during interactions
+  useEffect(() => {
+    for (const layer of state.layers) {
+      if (layer.type === "image" && layer.visible) {
+        ensureImageLoaded(layer.imageSrc);
+      }
+    }
+  }, [state.layers, ensureImageLoaded]);
+
   const onPointerDown = useCallback(
     (evt: PointerEvent): void => {
       if (evt.button !== 0) {
         return;
       }
       (evt.target as Element).setPointerCapture?.(evt.pointerId);
+      // Ensure we always draw on a vector layer (auto-create one if active is image)
+      dispatch({ type: "ENSURE_ACTIVE_VECTOR_LAYER" });
       isDrawingRef.current = true;
       const [x, y] = getRelativePoint(evt);
       const start: PathStroke = {
@@ -528,13 +776,56 @@ export function CanvasBoard({
     }
     const rect = container.getBoundingClientRect();
     const visibleLayers = state.layers.filter((l) => l.visible);
-    const dataUrl = getCanvasScreenshot(
-      visibleLayers,
-      Math.max(1, Math.floor(rect.width)),
-      Math.max(1, Math.floor(rect.height))
-    );
-    dispatch({ type: "SET_COMPOSITE", dataUrl });
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    (async () => {
+      const dataUrl = await getCanvasScreenshotAsync(
+        visibleLayers,
+        Math.max(1, Math.floor(rect.width)),
+        Math.max(1, Math.floor(rect.height))
+      );
+      dispatch({ type: "SET_COMPOSITE", dataUrl });
+    })();
   }, [state.layers]);
+
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+
+  const onGenerateBanana = useCallback(async (): Promise<void> => {
+    if (isGenerating) {
+      return;
+    }
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      const rect = container.getBoundingClientRect();
+      const visibleLayers = state.layers.filter((l) => l.visible);
+      const composite = await getCanvasScreenshotAsync(
+        visibleLayers,
+        Math.max(1, Math.floor(rect.width)),
+        Math.max(1, Math.floor(rect.height))
+      );
+      const res = await fetch("/api/nano-banana", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "banana-fy", images: [composite] }),
+      });
+      const json = (await res.json()) as { ok?: boolean; image?: string };
+      if (json?.ok && typeof json.image === "string" && json.image) {
+        dispatch({
+          type: "ADD_IMAGE_LAYER_TOP",
+          name: "Banana Layer",
+          imageSrc: json.image,
+          banana: true,
+        });
+      }
+    } catch (_e) {
+      // ignore
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [isGenerating, state.layers]);
 
   const drawActive = state.mode === "draw";
   const activeLayerId = state.activeLayerId;
@@ -634,7 +925,13 @@ export function CanvasBoard({
                       className="flex-1 text-left text-sm truncate"
                       title={layer.name}
                     >
-                      {isActive ? "●" : "○"} {layer.name}
+                      {isActive ? "●" : "○"} {layer.name}{" "}
+                      {layer.type === "image" &&
+                      (layer as ImageLayer).banana ? (
+                        <span className="ml-1 inline-block text-[10px] px-1 py-0.5 rounded bg-yellow-200 text-yellow-900 align-middle">
+                          banana
+                        </span>
+                      ) : null}
                     </button>
                     <button
                       onClick={(): void => onToggleLayer(layer.id)}
@@ -663,6 +960,15 @@ export function CanvasBoard({
                 + Add Layer
               </button>
             </div>
+          </div>
+          <div className="border-t pt-2">
+            <button
+              onClick={onGenerateBanana}
+              className="w-full rounded border bg-yellow-400 px-3 py-1 text-sm text-yellow-950 hover:bg-yellow-300 disabled:opacity-50"
+              disabled={isGenerating}
+            >
+              {isGenerating ? "Generating…" : "Generate Banana Layer"}
+            </button>
           </div>
           {state.compositeDataUrl ? (
             <div className="border-t pt-2">

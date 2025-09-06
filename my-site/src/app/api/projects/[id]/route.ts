@@ -41,8 +41,14 @@ export async function PATCH(
     }
 
     // Parse request body
-    const body = await req.json().catch(() => ({}));
-    const data = typeof body?.data === "string" ? body.data : null;
+    const body = (await req.json().catch(() => ({}))) as unknown;
+    const obj = (body && typeof body === "object" ? body : {}) as {
+      data?: unknown;
+      name?: unknown;
+    };
+    const data = typeof obj.data === "string" ? obj.data : null;
+    const nameRaw = typeof obj.name === "string" ? obj.name : null;
+    const name = nameRaw ? nameRaw.trim() : null;
 
     // Update project (ensure user owns the project)
     const project = await prisma.project.updateMany({
@@ -52,6 +58,7 @@ export async function PATCH(
       },
       data: {
         data,
+        ...(name !== null ? { name } : {}),
       },
     });
 

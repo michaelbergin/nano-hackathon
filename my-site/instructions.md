@@ -169,3 +169,8 @@ All components are now production-ready with best-in-class UX and developer expe
 
 - Function: `getCanvasScreenshot(layers, width, height)` composes visible layers into a single PNG data URL, honoring transparency and brush/erase operations.
 - UI: A "Screenshot" button stores the latest composite image in memory and previews it beneath the layer controls.
+
+### Nano-Banana Generate
+
+- Generate button: Posts the current composite to `/api/nano-banana` with a prompt.
+- Result: The returned image URL is added as a topmost image layer with a yellow "banana" badge. Image layers are persisted in the same `layers` array with `{ type: "image", imageSrc, banana }`.

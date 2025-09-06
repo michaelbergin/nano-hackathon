@@ -5,9 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ProjectCanvas } from "./ProjectCanvas";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Calendar } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface ProjectPageProps {
   params: Promise<{ id: string }>;
@@ -33,7 +31,21 @@ export default async function ProjectPage({
   }
 
   // Get project
-  const project = await prisma.project.findFirst({
+  type ProjectRecord = {
+    id: number;
+    name: string;
+    data: string | null;
+    userId: number;
+    createdAt: Date;
+    updatedAt: Date;
+  };
+  const project = await (
+    prisma as unknown as {
+      project: {
+        findFirst: (args: unknown) => Promise<ProjectRecord | null>;
+      };
+    }
+  ).project.findFirst({
     where: {
       id: projectId,
       userId: payload.userId, // Ensure user can only access their own projects
@@ -45,21 +57,8 @@ export default async function ProjectPage({
   }
 
   return (
-    <AppShell>
-      <div className="w-full h-full grid grid-rows-[auto_1fr] gap-4 overflow-hidden p-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold tracking-tight">
-                {project.name}
-              </h1>
-              <Badge variant="secondary" className="flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                {project.createdAt.toLocaleDateString()}
-              </Badge>
-            </div>
-          </CardHeader>
-        </Card>
+    <AppShell projectId={project.id} projectName={project.name}>
+      <div className="w-full h-full grid grid-rows-[1fr] gap-4 overflow-hidden p-4">
         <Card className="min-h-0 h-full">
           <CardContent className="p-0 h-full">
             <ProjectCanvas projectId={project.id} initialData={project.data} />

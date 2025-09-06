@@ -30,33 +30,23 @@ export async function runNanoBananaEdit({
 }: NanoBananaEditInput): Promise<NanoBananaEditResult> {
   configureFal();
 
-  const first = images[0];
-
   const input: Record<string, unknown> = {
     prompt,
+    image_urls: images,
+    num_images: 1,
+    output_format: "png",
   };
 
-  if (first) {
-    input["image_url"] = first;
-    input["image"] = first;
-    input["image_urls"] = images;
-    input["images"] = images;
-  }
-
-  const result: unknown = await fal.run("fal-ai/nano-banana/edit", {
+  const result = await fal.subscribe("fal-ai/nano-banana/edit", {
     input,
+    logs: false,
   });
 
-  const anyResult = result as Record<string, unknown>;
-  const url =
-    (anyResult?.images as Array<{ url?: unknown }> | undefined)?.[0]?.url ||
-    (anyResult?.image as { url?: unknown } | undefined)?.url ||
-    ((anyResult?.data as { images?: Array<{ url?: unknown }>; image?: { url?: unknown } } | undefined)?.images?.[0]?.url) ||
-    ((anyResult?.data as { images?: Array<{ url?: unknown }>; image?: { url?: unknown } } | undefined)?.image?.url) ||
-    (anyResult?.output as Array<{ url?: unknown }> | undefined)?.[0]?.url ||
-    (anyResult?.output as { image?: { url?: unknown } } | undefined)?.image?.url ||
-    (anyResult?.url as unknown);
-
+  const data = result?.data as unknown as {
+    images?: Array<{ url?: string }>;
+    image?: { url?: string };
+  };
+  const url = data?.images?.[0]?.url || data?.image?.url;
   if (!url || typeof url !== "string") {
     throw new Error("nano-banana/edit did not return an image URL");
   }

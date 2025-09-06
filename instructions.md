@@ -63,8 +63,18 @@
 - Canvas component: `src/components/CanvasBoard.tsx`
 - Features: freehand draw with mouse, overlay controls (Draw/Erase, color picker, brush size, Clear), HiDPI-aware resize.
 - Layers: reducer-managed layers with active selection, visibility toggling, add/remove, per-layer clearing.
+  - Added `ENSURE_ACTIVE_VECTOR_LAYER` so drawing always targets a vector layer (auto-creates/selects if active is image).
+  - Fixed `REMOVE_LAYER` to always compute a valid next active layer; if removing the last layer, a default vector layer is recreated and selected.
+  - `SELECT_LAYER` now ensures the selected layer is visible.
+  - Improved loader to hydrate both vector and image layers.
+  - Inserted debug logs across reducer transitions. Tests added at `my-site/src/components/CanvasBoard.reducer.test.ts`.
 - Persistence: JSON format `{ layers: Layer[] }`, with legacy single-layer import supported.
 - Screenshot: `getCanvasScreenshot` composes visible layers to a PNG data URL; latest capture is previewed in UI.
+- Generate: a Generate Banana Layer button posts the composite to `/api/nano-banana` and adds the result as an image layer with a banana badge.
+
+### Dev Notes
+
+- Tests via Vitest: from repo root `yarn --cwd my-site test`.
 - Layout: canvas is truly full-screen within the content area. Controls are an overlay panel positioned at top-left; there is no left rail.
 - Shell: `src/components/AppShell.tsx` sets `main` to `h-full` so children can fill viewport height beneath the header.
 - Project page: `src/app/projects/[id]/page.tsx` uses a two-row grid (header + `1fr`) so `ProjectCanvas` occupies all remaining space.
@@ -76,6 +86,13 @@
 - Top-left Menu opens an overlay left rail; closes on outside click or toggle.
 - Links: `New Project` (`/new`), `Create` (`/create`), `Projects` (`/projects`).
 - `Create` shows only `CanvasBoard` taking full width.
+
+## V1 Finalization
+
+- Projects list (`/projects`) is auth-protected and scoped to the current user. Rows are clickable and link to `'/projects/[id]'`.
+- Project detail page (`/projects/[id]`) fetches the project by `id` and `userId`, then renders `ProjectCanvas` with `initialData` from `Project.data`.
+- `ProjectCanvas` passes `initialData` to `CanvasBoard`, which loads the persisted `{ layers: Layer[] }` state and auto-saves JSON back to `Project.data` on changes via `PATCH /api/projects/[id]`.
+- Canvas data persistence supports legacy flat strokes arrays; data is stored as a JSON string in `Project.data`.
 
 ## Data
 
