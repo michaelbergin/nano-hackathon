@@ -85,6 +85,8 @@ export function CanvasBoard({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const offscreenRef = useRef<HTMLCanvasElement | null>(null);
+  const offscreenCtxRef = useRef<CanvasRenderingContext2D | null>(null);
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(
     new Map<string, HTMLImageElement>()
   );
@@ -193,36 +195,74 @@ export function CanvasBoard({
     }
   }, [state.layers, onSave]);
 
-  const drawPath = useCallback((stroke: PathStroke): void => {
-    const ctx = ctxRef.current;
-    if (!ctx) {
-      return;
-    }
-    drawPathOnContext(ctx, stroke);
-  }, []);
-
   const drawAll = useCallback((): void => {
     const ctx = ctxRef.current;
     const canvas = canvasRef.current;
     if (!ctx || !canvas) {
       return;
     }
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Ensure offscreen canvas exists and matches size/transform
+    let off = offscreenRef.current;
+    let octx = offscreenCtxRef.current;
+    if (!off || !octx) {
+      off = document.createElement("canvas");
+      off.width = canvas.width;
+      off.height = canvas.height;
+      octx = off.getContext("2d");
+      if (!octx) {
+        return;
+      }
+      const m = ctx.getTransform();
+      octx.setTransform(
+        m.a || 1,
+        m.b || 0,
+        m.c || 0,
+        m.d || 1,
+        m.e || 0,
+        m.f || 0
+      );
+      octx.lineJoin = "round";
+      octx.lineCap = "round";
+      offscreenRef.current = off;
+      offscreenCtxRef.current = octx;
+    }
+
+    // Derive CSS pixel size from transform
+    const m = ctx.getTransform();
+    const scaleX = m.a || 1;
+    const scaleY = m.d || 1;
+    const cssW = canvas.width / scaleX;
+    const cssH = canvas.height / scaleY;
+
+    // Clear main canvas in CSS pixels (transform applies DPR)
+    ctx.clearRect(0, 0, cssW, cssH);
+
     for (const layer of state.layers) {
       if (!layer.visible) {
         continue;
       }
+
+      // Reset and clear the offscreen layer canvas
+      if (off.width !== canvas.width || off.height !== canvas.height) {
+        off.width = canvas.width;
+        off.height = canvas.height;
+        octx.setTransform(
+          m.a || 1,
+          m.b || 0,
+          m.c || 0,
+          m.d || 1,
+          m.e || 0,
+          m.f || 0
+        );
+        octx.lineJoin = "round";
+        octx.lineCap = "round";
+      }
+      octx.clearRect(0, 0, off.width, off.height);
+
       if (layer.type === "image") {
         const cached = imageCacheRef.current.get(layer.imageSrc) ?? null;
         if (cached) {
-          // Draw images preserving aspect ratio and centering them
-          const m = ctx.getTransform();
-          const scaleX = m.a || 1;
-          const scaleY = m.d || 1;
-          const cssW = canvas.width / scaleX;
-          const cssH = canvas.height / scaleY;
-
-          // Calculate aspect ratios
           const imageAspectRatio = cached.width / cached.height;
           const canvasAspectRatio = cssW / cssH;
 
@@ -231,34 +271,35 @@ export function CanvasBoard({
           let drawX: number;
           let drawY: number;
 
-          // Determine dimensions while preserving aspect ratio
           if (imageAspectRatio > canvasAspectRatio) {
-            // Image is wider than canvas - fit by width
             drawWidth = cssW;
             drawHeight = cssW / imageAspectRatio;
             drawX = 0;
-            drawY = (cssH - drawHeight) / 2; // Center vertically
+            drawY = (cssH - drawHeight) / 2;
           } else {
-            // Image is taller than canvas - fit by height
             drawHeight = cssH;
             drawWidth = cssH * imageAspectRatio;
-            drawX = (cssW - drawWidth) / 2; // Center horizontally
+            drawX = (cssW - drawWidth) / 2;
             drawY = 0;
           }
 
-          ctx.drawImage(cached, drawX, drawY, drawWidth, drawHeight);
+          octx.drawImage(cached, drawX, drawY, drawWidth, drawHeight);
         }
       } else {
         for (const s of layer.strokes) {
-          drawPath(s);
+          drawPathOnContext(octx, s);
+        }
+        // Draw in-progress stroke only on the active vector layer
+        const current = currentPathRef.current;
+        if (current && layer.id === state.activeLayerId) {
+          drawPathOnContext(octx, current);
         }
       }
+
+      // Composite this layer onto the main canvas using CSS pixel destination size
+      ctx.drawImage(off, 0, 0, off.width, off.height, 0, 0, cssW, cssH);
     }
-    const current = currentPathRef.current;
-    if (current) {
-      drawPath(current);
-    }
-  }, [state.layers, drawPath]);
+  }, [state.layers, state.activeLayerId]);
 
   const resizeCanvas = useCallback((): void => {
     const canvas = canvasRef.current;
@@ -282,6 +323,22 @@ export function CanvasBoard({
     ctx.lineWidth = state.brushSize;
     ctx.strokeStyle = state.strokeColor;
     ctxRef.current = ctx;
+
+    // Initialize or resize offscreen layer canvas to match
+    let off = offscreenRef.current;
+    if (!off) {
+      off = document.createElement("canvas");
+      offscreenRef.current = off;
+    }
+    off.width = canvas.width;
+    off.height = canvas.height;
+    const octx = off.getContext("2d");
+    if (octx) {
+      octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      octx.lineJoin = "round";
+      octx.lineCap = "round";
+      offscreenCtxRef.current = octx;
+    }
     drawAll();
   }, [state.brushSize, state.strokeColor, drawAll]);
 

@@ -1,5 +1,4 @@
 import { fal } from "@fal-ai/client";
-import type { JSX } from "react";
 
 type ImageUrl = string;
 

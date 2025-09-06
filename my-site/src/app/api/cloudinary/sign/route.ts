@@ -58,7 +58,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       params: toSign,
       cloudName: cloudinary.config().cloud_name,
     });
-  } catch (err) {
+  } catch {
     // Avoid leaking secrets in error messages
     return NextResponse.json(
       { ok: false, error: "Cloudinary not configured" },

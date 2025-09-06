@@ -1,7 +1,7 @@
 "use client";
 
 import type { JSX } from "react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Menu, User, LogOut, Plus, FileText, FolderOpen } from "lucide-react";
@@ -35,24 +35,92 @@ interface HeaderProps {
  */
 export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
   const router = useRouter();
+  const [isEditingName, setIsEditingName] = useState<boolean>(false);
+  const [pendingName, setPendingName] = useState<string>(projectName ?? "");
+  const [isSavingName, setIsSavingName] = useState<boolean>(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleCreateUntitled = useCallback(async (): Promise<void> => {
+  const handleCreateUntitled = useCallback((): void => {
+    router.push("/new");
+  }, [router]);
+
+  useEffect((): void => {
+    if (isEditingName && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditingName]);
+
+  useEffect((): void => {
+    // Keep local state in sync if prop changes due to navigation
+    setPendingName(projectName ?? "");
+  }, [projectName]);
+
+  const startEditingName = useCallback((): void => {
+    if (!projectId) {
+      return;
+    }
+    setIsEditingName(true);
+  }, [projectId]);
+
+  const cancelEditingName = useCallback((): void => {
+    setPendingName(projectName ?? "");
+    setIsEditingName(false);
+  }, [projectName]);
+
+  const submitEditingName = useCallback(async (): Promise<void> => {
+    if (!projectId) {
+      return;
+    }
+    const trimmed = (pendingName ?? "").trim();
+    if (!trimmed || trimmed === projectName) {
+      setIsEditingName(false);
+      setPendingName(projectName ?? "");
+      return;
+    }
     try {
-      const res = await fetch("/api/projects", {
-        method: "POST",
+      setIsSavingName(true);
+      // Optimistic local update
+      setIsEditingName(false);
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "untitled" }),
         credentials: "include",
+        body: JSON.stringify({ name: trimmed }),
       });
       if (!res.ok) {
+        // Revert local state on error
+        setPendingName(projectName ?? "");
         return;
       }
-      const data = (await res.json()) as { project: { id: number } };
-      router.push(`/create?id=${data.project.id}`);
+      setPendingName(trimmed);
+      router.refresh();
     } catch {
-      // noop
+      setPendingName(projectName ?? "");
+    } finally {
+      setIsSavingName(false);
     }
-  }, [router]);
+  }, [pendingName, projectId, projectName, router]);
+
+  const handleNameKeyDown = useCallback(
+    async (e: React.KeyboardEvent<HTMLInputElement>): Promise<void> => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        await submitEditingName();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        cancelEditingName();
+      }
+    },
+    [cancelEditingName, submitEditingName]
+  );
+
+  const handleNameChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>): void => {
+      setPendingName(e.target.value);
+    },
+    []
+  );
 
   return (
     <header className="h-14 border-b flex items-center gap-2 sm:gap-3 px-2 sm:px-4 bg-background relative z-30 touch-manipulation">
@@ -102,19 +170,39 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
           variant="ghost"
           size="sm"
           aria-label="Create new project"
-          className="ml-1 sm:ml-2"
+          title="Create new project"
+          className="ml-1 sm:ml-2 transition-all duration-300 ease-in-out hover:bg-primary/10 hover:text-primary hover:scale-110 hover:shadow-md focus:ring-2 focus:ring-primary/20 focus:ring-offset-1 active:scale-95 border border-transparent hover:border-primary/20 rounded-md"
           onClick={handleCreateUntitled}
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4 transition-transform duration-300 ease-in-out" />
         </Button>
       </div>
 
       {/* Centered Project Name */}
-      {projectId && projectName ? (
+      {projectId ? (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-12">
-          <div className="font-semibold text-sm sm:text-base md:text-lg text-muted-foreground truncate">
-            {projectName}
-          </div>
+          {isEditingName ? (
+            <input
+              ref={inputRef}
+              type="text"
+              className="pointer-events-auto bg-transparent border-b border-muted-foreground/30 focus:outline-none focus:border-primary text-sm sm:text-base md:text-lg text-foreground font-semibold text-center truncate max-w-[70%]"
+              value={pendingName}
+              onChange={handleNameChange}
+              onBlur={submitEditingName}
+              onKeyDown={handleNameKeyDown}
+              aria-label="Project name"
+              disabled={isSavingName}
+            />
+          ) : (
+            <button
+              type="button"
+              className="pointer-events-auto font-semibold text-sm sm:text-base md:text-lg text-muted-foreground truncate max-w-[70%]"
+              title="Click to rename project"
+              onClick={startEditingName}
+            >
+              {pendingName || projectName || "Untitled"}
+            </button>
+          )}
         </div>
       ) : null}
 

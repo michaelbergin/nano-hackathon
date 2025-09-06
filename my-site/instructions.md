@@ -246,13 +246,26 @@ Acceptance:
 ### Quick Create (Untitled)
 
 - A quick-create icon is now in the header next to the `Banananano` brand.
-- Clicking it sends `POST /api/projects` with `{ name: "untitled" }` and redirects to `/create?id=<projectId>`.
-- File: `src/components/Header.tsx` (uses a `Plus` icon button and `fetch` with `credentials: "include"`).
+- Clicking it navigates to `/new`, which performs the project creation and redirects to `/create?id=<projectId>`.
+- File: `src/components/Header.tsx` routes to `/new` for consistent behavior with the left menu.
 
 ### Centered Project Name in Header
 
 - When a project is loaded, its name appears centered in the header.
 - Files: `src/components/Header.tsx` (absolute center overlay), consumed via `AppShell` props from project pages.
+
+#### Inline Rename (Click-to-Edit) — NEW
+
+- Click the centered project title in the header to rename it inline.
+- Editing UX:
+  - Enter submits, Escape cancels, Blur submits.
+  - Optimistic update with a background `PATCH /api/projects/[id]` of `{ name }`.
+  - On success, the header refreshes via `router.refresh()` to stay in sync.
+  - Disabled while saving; reverts on error.
+- Implementation details in `src/components/Header.tsx`:
+  - Local state: `isEditingName`, `pendingName`, `isSavingName` with input `ref` for focus/select.
+  - Keeps `pendingName` synchronized with incoming `projectName` prop changes.
+  - Only enabled when `projectId` is present.
 
 ### Create Page Uses Project Context
 
@@ -262,10 +275,53 @@ Acceptance:
 
 ### New Project Route Behavior
 
-- `/new` now auto-creates an `untitled` project on mount and redirects to `/create?id=<projectId>`.
+- `/new` auto-creates an `untitled` project on mount and redirects to `/create?id=<projectId>`.
 - File: `src/app/new/page.tsx`.
 
 ### Navigation Summary
 
 - Links: `New Project` (`/new`), `Create` (`/create?id=...`), `Projects` (`/projects`).
 - Header brand area includes a quick-create icon for fast entry to a new canvas.
+
+## Code Refactoring - Canvas Utils Extraction ✅ COMPLETED
+
+### Goal
+
+Extract the largest utility functions from `CanvasBoard.tsx` to improve code organization and maintainability by creating a separate `canvasUtils.ts` file.
+
+### What Was Extracted
+
+Successfully moved the following functions to `src/components/canvasUtils.ts`:
+
+1. **`boardReducer`** (~210 lines) - The main state reducer for canvas operations
+2. **`getCanvasScreenshotAsync`** (~40 lines) - Async screenshot generation with image layer support
+3. **`getCanvasScreenshot`** (~35 lines) - Sync screenshot generation for vector layers only
+4. **`drawPathOnContext`** (~20 lines) - Pure utility for drawing paths on canvas context
+5. **`generateLayerId`**, **`createLayer`**, **`ensureActiveLayerId`** - Small utility functions
+
+### Benefits Achieved
+
+- **Reduced CanvasBoard.tsx size**: Removed ~300+ lines of utility code
+- **Better separation of concerns**: Pure functions separated from React component logic
+- **Improved maintainability**: Utility functions now have dedicated, testable module
+- **Enhanced reusability**: Canvas utilities can be imported by other components if needed
+
+### Technical Details
+
+- All extracted functions are pure utilities with minimal dependencies
+- Proper TypeScript types maintained throughout the extraction
+- Updated test file (`CanvasBoard.reducer.test.ts`) to import from new location
+- Zero breaking changes - all functionality preserved
+- TypeScript compilation passes successfully
+
+### File Structure
+
+```
+src/components/
+├── CanvasBoard.tsx        # React component with DOM/UI logic
+├── canvasUtils.ts         # Pure utility functions
+├── CanvasBoardControls.tsx
+└── CanvasBoard.reducer.test.ts  # Updated to use canvasUtils
+```
+
+This refactoring maintains full backward compatibility while significantly improving code organization and making the codebase more maintainable.

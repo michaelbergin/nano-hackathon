@@ -95,15 +95,28 @@ export function getCanvasScreenshot(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
+  // Per-layer compositing using an intermediate canvas ensures erasing remains scoped to the layer
+  const layerCanvas = document.createElement("canvas");
+  layerCanvas.width = off.width;
+  layerCanvas.height = off.height;
+  const layerCtx = layerCanvas.getContext("2d");
+  if (!layerCtx) {
+    return "";
+  }
+  layerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  layerCtx.lineJoin = "round";
+  layerCtx.lineCap = "round";
   for (const layer of layers) {
     if (!layer.visible) {
       continue;
     }
+    layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
     if (layer.type === "vector") {
       for (const stroke of layer.strokes) {
-        drawPathOnContext(ctx, stroke);
+        drawPathOnContext(layerCtx, stroke);
       }
     }
+    ctx.drawImage(layerCanvas, 0, 0);
   }
   return off.toDataURL("image/png");
 }
@@ -134,21 +147,35 @@ export async function getCanvasScreenshotAsync(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
+  // Per-layer compositing to keep erase strokes scoped to their own layer
+  const layerCanvas = document.createElement("canvas");
+  layerCanvas.width = off.width;
+  layerCanvas.height = off.height;
+  const layerCtx = layerCanvas.getContext("2d");
+  if (!layerCtx) {
+    return "";
+  }
+  layerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  layerCtx.lineJoin = "round";
+  layerCtx.lineCap = "round";
   for (const layer of layers) {
     if (!layer.visible) {
       continue;
     }
+    layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
     if (layer.type === "image") {
       const img = new window.Image();
       img.crossOrigin = "anonymous";
       img.src = layer.imageSrc;
       await img.decode().catch(() => undefined);
-      ctx.drawImage(img, 0, 0, width, height);
+      // Draw image stretched to requested output size; aspect-fit is handled in live canvas
+      layerCtx.drawImage(img, 0, 0, width, height);
     } else {
       for (const stroke of layer.strokes) {
-        drawPathOnContext(ctx, stroke);
+        drawPathOnContext(layerCtx, stroke);
       }
     }
+    ctx.drawImage(layerCanvas, 0, 0);
   }
   return off.toDataURL("image/png");
 }

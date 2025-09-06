@@ -9,10 +9,7 @@
     - TEST_IMAGE_URL (optional): public image URL; if unset we use a tiny data URI
 */
 
-/* eslint-disable no-console */
-
-import fs from "node:fs";
-import path from "node:path";
+ 
 
 async function main(): Promise<void> {
   const origin = process.env.SERVER_ORIGIN || "http://localhost:3001";

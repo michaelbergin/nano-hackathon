@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
 export type CanvasControlsState = {
@@ -239,10 +240,9 @@ function CanvasBoardControlsBase({
         </div>
       </div>
 
-      {/* Right column: Layers and Banana AI, vertically centered */}
-      <div className="pointer-events-none absolute right-4 top-1/2 z-10 -translate-y-1/2">
-        <div className="pointer-events-auto flex w-80 flex-col gap-4">
-          {/* Layers Card */}
+      {/* Layers menu at top right */}
+      <div className="pointer-events-none absolute top-4 right-4 z-10">
+        <div className="pointer-events-auto">
           <Card className="w-80 shadow-lg">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
@@ -251,7 +251,7 @@ function CanvasBoardControlsBase({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="max-h-48 overflow-y-auto space-y-2">
+              <div className="max-h-[calc(100vh-12rem)] overflow-y-auto space-y-2">
                 {state.layers.map((layer) => {
                   const isActive = layer.id === activeLayerId;
                   return (
@@ -327,8 +327,12 @@ function CanvasBoardControlsBase({
               </Button>
             </CardContent>
           </Card>
+        </div>
+      </div>
 
-          {/* Banana Generation Card */}
+      {/* Banana AI card at bottom right */}
+      <div className="pointer-events-none absolute bottom-4 right-4 z-10">
+        <div className="pointer-events-auto">
           <Card className="w-80 shadow-lg">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
@@ -350,14 +354,15 @@ function CanvasBoardControlsBase({
                 <Label htmlFor="bananaPrompt" className="text-sm font-medium">
                   Prompt
                 </Label>
-                <Input
+                <Textarea
                   id="bananaPrompt"
                   placeholder="banana-fy this image"
                   value={state.bananaPrompt}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
                     actions.setBananaPrompt(e.target.value)
                   }
-                  className="text-sm"
+                  className="text-sm resize-none"
+                  rows={3}
                 />
               </div>
             </CardContent>
