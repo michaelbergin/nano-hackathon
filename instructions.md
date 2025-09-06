@@ -69,8 +69,19 @@
   - Improved loader to hydrate both vector and image layers.
   - Inserted debug logs across reducer transitions. Tests added at `my-site/src/components/CanvasBoard.reducer.test.ts`.
 - Persistence: JSON format `{ layers: Layer[] }`, with legacy single-layer import supported.
-- Screenshot: `getCanvasScreenshot` composes visible layers to a PNG data URL; latest capture is previewed in UI.
+- Screenshot/Download: `getCanvasScreenshot` composes visible layers to a PNG data URL; latest capture is previewed in UI. Added "Download PNG" to save the current composite to disk.
 - Generate: a Generate Banana Layer button posts the composite to `/api/nano-banana` and adds the result as an image layer with a banana badge.
+  - Prompt: a text input controls the prompt sent to the generate endpoint; default/placeholder is `banana-fy`.
+
+### Image Layers & Uploads
+
+- You can upload an image to the canvas; it is added as a top image layer with an "img" badge. Banana-generated images keep a yellow "banana" badge.
+- Cloudinary uploads are supported via unsigned upload:
+  - Cloud name: `dqyx4lyxn` (configured in client request URL)
+  - Set `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` in `.env.local` to your unsigned upload preset name
+  - If the preset is not set, uploads fall back to `URL.createObjectURL` for local preview only (not persisted remotely)
+- Signed upload fallback: If no unsigned preset is configured, client requests a signature from `POST /api/cloudinary/sign` (requires `CLOUDINARY_URL` in `.env.local`) and performs a signed upload using API key and signature.
+- Persistence: Image layer `imageSrc` URLs are saved in `Project.data` along with vector layers. When using local object URLs, persist a proper remote URL later if needed.
 
 ### Mobile & Apple Pencil
 
@@ -96,6 +107,11 @@
 - Top-left Menu opens an overlay left rail; closes on outside click or toggle.
 - Links: `New Project` (`/new`), `Create` (`/create`), `Projects` (`/projects`).
 - `Create` shows only `CanvasBoard` taking full width.
+
+### SPA Scroll Model
+
+- Page is a full-frame SPA: `body` uses `overflow-hidden` and `h-dvh` to prevent global scrolling.
+- Scroll is enabled only within intentional regions (e.g., left sheet, control panels, long lists) via `overflow-y-auto` and constrained max-heights.
 
 ## V1 Finalization
 

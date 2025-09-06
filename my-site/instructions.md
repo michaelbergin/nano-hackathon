@@ -165,12 +165,65 @@ All components are now production-ready with best-in-class UX and developer expe
 - Serialization: Canvas data is saved as `{ layers: Layer[] }` to `Project.data`.
 - Legacy support: If legacy JSON is an array of strokes, it is loaded as a single visible layer named "Layer 1".
 
-### Screenshot (Composite)
+### Screenshot (Composite) & Download
 
 - Function: `getCanvasScreenshot(layers, width, height)` composes visible layers into a single PNG data URL, honoring transparency and brush/erase operations.
-- UI: A "Screenshot" button stores the latest composite image in memory and previews it beneath the layer controls.
+- UI: A "Screenshot" button stores the latest composite image in memory and previews it beneath the layer controls. A "Download PNG" button saves the latest composite to disk as `canvas-YYYYMMDD-hhmmss.png`.
+
+### Image Uploads & Cloudinary
+
+- Upload: An "Upload Image" button lets you pick an image file; it becomes a top image layer with an `img` badge. Image layers persist in project data like vector layers.
+- Aspect Ratio Preservation: Uploaded images automatically preserve their original aspect ratio while fitting within the canvas bounds. Images are centered and scaled to fit the available space without distortion.
+- Cloudinary: Client-side unsigned uploads are supported.
+  - Cloud name: `dqyx4lyxn`
+  - Configure env var `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` with your unsigned preset name
+  - If not configured, a local object URL is used as a fallback for immediate display (not uploaded).
+
+Signed uploads (fallback when no unsigned preset):
+
+- Server route: `POST /api/cloudinary/sign` returns a signature for upload params.
+- The client calls this route and posts to Cloudinary with `api_key`, `timestamp`, and `signature`.
+- Requires `.env.local` with `CLOUDINARY_URL=cloudinary://<API_KEY>:<API_SECRET>@dqyx4lyxn`.
 
 ### Nano-Banana Generate
 
 - Generate button: Posts the current composite to `/api/nano-banana` with a prompt.
+- Prompt input: A shadcn `Input` labeled "Prompt" allows changing the text sent to generation. Default placeholder is `banana-fy` and initial value is `banana-fy`.
 - Result: The returned image URL is added as a topmost image layer with a yellow "banana" badge. Image layers are persisted in the same `layers` array with `{ type: "image", imageSrc, banana }`.
+
+### Canvas Controls Extraction (CanvasBoardControls)
+
+Goal: Move all canvas overlay controls and user-triggered actions out of `src/components/CanvasBoard.tsx` into `src/components/CanvasBoardControls.tsx`, keeping DOM/drawing/persistence in `CanvasBoard`.
+
+API:
+
+- Props: `{ state, actions }`
+- `state`: `{ mode, strokeColor, brushSize, layers, activeLayerId, compositeDataUrl, isGenerating }`
+- `actions`: `{ addLayer, removeLayer, selectLayer, toggleLayerVisibility, setMode, setColor, setBrushSize, clearActive, clearAll, captureComposite, generateBanana }`
+
+Boundaries:
+
+- Controls are DOM-agnostic (no refs, no canvas ops).
+- `CanvasBoard` retains reducer, pointer handlers, draw/resize, persistence.
+
+Steps:
+
+1. Created `CanvasBoardControls.tsx` with typed props and shadcn/ui minimal UI.
+2. Integrated into `CanvasBoard.tsx` and passed memoized action callbacks.
+3. Removed inline overlay controls from `CanvasBoard.tsx`.
+4. Preserved brush clamping and `resizeCanvas()` in board callbacks.
+
+Acceptance:
+
+- Feature parity: draw/erase, color/size, layers (add/remove/select/visibility), clear active/all, screenshot preview, banana generate, persistence.
+- No new type/ESLint errors; no perf regressions.
+
+### Controls Layout Update (Left/Right Columns)
+
+- Left column (top-left overlay): `Tools`, `Actions` (Clear Active, Clear All, Screenshot), and conditional `Preview`.
+- Right column (center-right overlay): `Layers` list and a dedicated `Generate` card with the Generate button.
+- Rationale: keeps drawing affordances on the left while moving workflow/layer management to the right, minimizing hand travel and creating a balanced canvas workspace.
+- Implementation: `CanvasBoardControls.tsx` renders two absolutely positioned stacks:
+  - Left: `left-4 top-4 flex-col gap-4`
+  - Right: `right-4 top-1/2 -translate-y-1/2 flex-col gap-4`
+  - Generate button moved out of Actions and into a new right-side "Generate" card.

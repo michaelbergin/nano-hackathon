@@ -2,6 +2,28 @@
 
 import type { JSX, ChangeEvent } from "react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import {
+  Pencil,
+  Eraser,
+  Palette,
+  Trash2,
+  RotateCcw,
+  Camera,
+  Download,
+  Upload,
+  Plus,
+  Eye,
+  EyeOff,
+  X,
+  Banana,
+  Layers,
+  Settings,
+  Image as ImageIcon,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export type Point2 = [number, number];
 export type PolyLine2 = number[];
@@ -393,7 +415,7 @@ async function getCanvasScreenshotAsync(
       continue;
     }
     if (layer.type === "image") {
-      const img = new Image();
+      const img = new window.Image();
       img.crossOrigin = "anonymous";
       img.src = layer.imageSrc;
       await img.decode().catch(() => undefined);
@@ -414,7 +436,10 @@ export function CanvasBoard({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
-  const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const imageCacheRef = useRef<Map<string, HTMLImageElement>>(
+    new Map<string, HTMLImageElement>()
+  );
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isDrawingRef = useRef<boolean>(false);
   const currentPathRef = useRef<PathStroke | null>(null);
@@ -541,7 +566,38 @@ export function CanvasBoard({
       if (layer.type === "image") {
         const cached = imageCacheRef.current.get(layer.imageSrc) ?? null;
         if (cached) {
-          ctx.drawImage(cached, 0, 0, canvas.width, canvas.height);
+          // Draw images preserving aspect ratio and centering them
+          const m = ctx.getTransform();
+          const scaleX = m.a || 1;
+          const scaleY = m.d || 1;
+          const cssW = canvas.width / scaleX;
+          const cssH = canvas.height / scaleY;
+
+          // Calculate aspect ratios
+          const imageAspectRatio = cached.width / cached.height;
+          const canvasAspectRatio = cssW / cssH;
+
+          let drawWidth: number;
+          let drawHeight: number;
+          let drawX: number;
+          let drawY: number;
+
+          // Determine dimensions while preserving aspect ratio
+          if (imageAspectRatio > canvasAspectRatio) {
+            // Image is wider than canvas - fit by width
+            drawWidth = cssW;
+            drawHeight = cssW / imageAspectRatio;
+            drawX = 0;
+            drawY = (cssH - drawHeight) / 2; // Center vertically
+          } else {
+            // Image is taller than canvas - fit by height
+            drawHeight = cssH;
+            drawWidth = cssH * imageAspectRatio;
+            drawX = (cssW - drawWidth) / 2; // Center horizontally
+            drawY = 0;
+          }
+
+          ctx.drawImage(cached, drawX, drawY, drawWidth, drawHeight);
         }
       } else {
         for (const s of layer.strokes) {
@@ -592,7 +648,7 @@ export function CanvasBoard({
       if (imageCacheRef.current.has(src)) {
         return;
       }
-      const img = new Image();
+      const img = new window.Image();
       img.crossOrigin = "anonymous";
       img.onload = () => {
         imageCacheRef.current.set(src, img);
@@ -814,6 +870,137 @@ export function CanvasBoard({
   }, [state.layers]);
 
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [bananaPrompt, setBananaPrompt] = useState<string>("banana-fy");
+
+  const downloadComposite = useCallback(async (): Promise<void> => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    const rect = container.getBoundingClientRect();
+    const visibleLayers = state.layers.filter((l) => l.visible);
+    const dataUrl = await getCanvasScreenshotAsync(
+      visibleLayers,
+      Math.max(1, Math.floor(rect.width)),
+      Math.max(1, Math.floor(rect.height))
+    );
+    if (!dataUrl) {
+      return;
+    }
+    const a = document.createElement("a");
+    const ts = new Date();
+    const yyyy = ts.getFullYear().toString();
+    const mm = String(ts.getMonth() + 1).padStart(2, "0");
+    const dd = String(ts.getDate()).padStart(2, "0");
+    const hh = String(ts.getHours()).padStart(2, "0");
+    const nn = String(ts.getMinutes()).padStart(2, "0");
+    const ss = String(ts.getSeconds()).padStart(2, "0");
+    a.href = dataUrl;
+    a.download = `canvas-${yyyy}${mm}${dd}-${hh}${nn}${ss}.png`;
+    a.click();
+  }, [state.layers]);
+
+  const uploadToCloudinary = useCallback(
+    async (file: File): Promise<string | null> => {
+      try {
+        const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+        const form = new FormData();
+        form.append("file", file);
+        if (uploadPreset) {
+          form.append("upload_preset", uploadPreset);
+          const res = await fetch(
+            "https://api.cloudinary.com/v1_1/dqyx4lyxn/image/upload",
+            {
+              method: "POST",
+              body: form,
+            }
+          );
+          const json = (await res.json()) as unknown;
+          if (
+            json &&
+            typeof json === "object" &&
+            "secure_url" in (json as Record<string, unknown>) &&
+            typeof (json as { secure_url?: unknown }).secure_url === "string"
+          ) {
+            return (json as { secure_url: string }).secure_url;
+          }
+          return null;
+        }
+        const signRes = await fetch("/api/cloudinary/sign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            params: { timestamp: Math.floor(Date.now() / 1000) },
+          }),
+        });
+        const signJson = (await signRes.json()) as {
+          ok?: boolean;
+          signature?: string;
+          params?: Record<string, string>;
+          cloudName?: string;
+        };
+        if (
+          !signJson?.ok ||
+          !signJson.signature ||
+          !signJson.params ||
+          !signJson.cloudName
+        ) {
+          return null;
+        }
+        for (const [k, v] of Object.entries(signJson.params)) {
+          form.append(k, v);
+        }
+        form.append("signature", signJson.signature);
+        form.append("api_key", "598646243146163");
+        const res = await fetch(
+          `https://api.cloudinary.com/v1_1/${signJson.cloudName}/image/upload`,
+          {
+            method: "POST",
+            body: form,
+          }
+        );
+        const json = (await res.json()) as unknown;
+        if (
+          json &&
+          typeof json === "object" &&
+          "secure_url" in (json as Record<string, unknown>) &&
+          typeof (json as { secure_url?: unknown }).secure_url === "string"
+        ) {
+          return (json as { secure_url: string }).secure_url;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    },
+    []
+  );
+
+  const onOpenUpload = useCallback((): void => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const onFileSelected = useCallback(
+    async (e: ChangeEvent<HTMLInputElement>): Promise<void> => {
+      const file =
+        e.target.files && e.target.files[0] ? e.target.files[0] : null;
+      e.target.value = "";
+      if (!file) {
+        return;
+      }
+      let imageSrc: string | null = null;
+      imageSrc = await uploadToCloudinary(file);
+      if (!imageSrc) {
+        imageSrc = URL.createObjectURL(file);
+      }
+      dispatch({
+        type: "ADD_IMAGE_LAYER_TOP",
+        name: file.name || "Image Layer",
+        imageSrc,
+      });
+    },
+    [uploadToCloudinary]
+  );
 
   const onGenerateBanana = useCallback(async (): Promise<void> => {
     if (isGenerating) {
@@ -835,7 +1022,7 @@ export function CanvasBoard({
       const res = await fetch("/api/nano-banana", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: "banana-fy", images: [composite] }),
+        body: JSON.stringify({ prompt: bananaPrompt, images: [composite] }),
       });
       const json = (await res.json()) as { ok?: boolean; image?: string };
       if (json?.ok && typeof json.image === "string" && json.image) {
@@ -851,7 +1038,7 @@ export function CanvasBoard({
     } finally {
       setIsGenerating(false);
     }
-  }, [isGenerating, state.layers]);
+  }, [isGenerating, state.layers, bananaPrompt]);
 
   const drawActive = state.mode === "draw";
   const activeLayerId = state.activeLayerId;
@@ -865,149 +1052,289 @@ export function CanvasBoard({
         />
       </div>
 
-      <div className="pointer-events-none absolute top-3 left-3 z-10">
-        <div className="pointer-events-auto border rounded bg-white p-3 space-y-3 shadow w-[320px]">
-          <div className="text-sm font-medium">Canvas</div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onSetModeDraw}
-              aria-pressed={drawActive}
-              className={`rounded border px-3 py-1 text-sm ${
-                drawActive
-                  ? "bg-gray-900 text-white"
-                  : "bg-white hover:bg-gray-50"
-              }`}
-            >
-              Draw
-            </button>
-            <button
-              onClick={onSetModeErase}
-              aria-pressed={!drawActive}
-              className={`rounded border px-3 py-1 text-sm ${
-                !drawActive
-                  ? "bg-gray-900 text-white"
-                  : "bg-white hover:bg-gray-50"
-              }`}
-            >
-              Erase
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-700">Color</label>
-            <input
-              type="color"
-              value={state.strokeColor}
-              onChange={onColorChange}
-              className="h-8 w-10 p-0 border rounded"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-700">Brush</label>
-            <input
-              type="range"
-              min={1}
-              max={24}
-              value={state.brushSize}
-              onChange={onSizeChange}
-            />
-            <span className="text-xs text-gray-500 w-6 text-right">
-              {state.brushSize}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onClearActive}
-              className="rounded border bg-white px-3 py-1 text-sm hover:bg-gray-50"
-            >
-              Clear Active
-            </button>
-            <button
-              onClick={onClearAll}
-              className="rounded border bg-white px-3 py-1 text-sm hover:bg-gray-50"
-            >
-              Clear All
-            </button>
-            <button
-              onClick={captureScreenshot}
-              className="rounded border bg-white px-3 py-1 text-sm hover:bg-gray-50"
-            >
-              Screenshot
-            </button>
-          </div>
-          <div className="border-t pt-2">
-            <div className="text-sm font-medium mb-1">Layers</div>
-            <div className="max-h-40 overflow-auto space-y-1">
-              {state.layers.map((layer) => {
-                const isActive = layer.id === activeLayerId;
-                return (
-                  <div
-                    key={layer.id}
-                    className={`flex items-center justify-between gap-2 rounded px-2 py-1 ${
-                      isActive ? "bg-gray-100" : ""
-                    }`}
-                  >
-                    <button
-                      onClick={(): void => onSelectLayer(layer.id)}
-                      className="flex-1 text-left text-sm truncate"
-                      title={layer.name}
-                    >
-                      {isActive ? "●" : "○"} {layer.name}{" "}
-                      {layer.type === "image" &&
-                      (layer as ImageLayer).banana ? (
-                        <span className="ml-1 inline-block text-[10px] px-1 py-0.5 rounded bg-yellow-200 text-yellow-900 align-middle">
-                          banana
-                        </span>
-                      ) : null}
-                    </button>
-                    <button
-                      onClick={(): void => onToggleLayer(layer.id)}
-                      className="rounded border bg-white px-2 py-0.5 text-xs hover:bg-gray-50"
-                      title={layer.visible ? "Hide" : "Show"}
-                    >
-                      {layer.visible ? "Hide" : "Show"}
-                    </button>
-                    <button
-                      onClick={(): void => onRemoveLayer(layer.id)}
-                      className="rounded border bg-white px-2 py-0.5 text-xs hover:bg-gray-50"
-                      disabled={state.layers.length <= 1}
-                      title="Delete layer"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-2">
-              <button
-                onClick={onAddLayer}
-                className="rounded border bg-white px-3 py-1 text-sm hover:bg-gray-50 w-full"
-              >
-                + Add Layer
-              </button>
-            </div>
-          </div>
-          <div className="border-t pt-2">
-            <button
-              onClick={onGenerateBanana}
-              className="w-full rounded border bg-yellow-400 px-3 py-1 text-sm text-yellow-950 hover:bg-yellow-300 disabled:opacity-50"
-              disabled={isGenerating}
-            >
-              {isGenerating ? "Generating…" : "Generate Banana Layer"}
-            </button>
-          </div>
-          {state.compositeDataUrl ? (
-            <div className="border-t pt-2">
-              <div className="text-sm text-gray-700 mb-1">
-                Latest Screenshot
+      <div className="pointer-events-none absolute top-4 left-4 z-10">
+        <div className="pointer-events-auto flex flex-col gap-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
+          {/* Tools Card */}
+          <Card className="w-80 shadow-lg">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Settings className="h-4 w-4" />
+                Tools
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Mode Selection */}
+              <div className="flex gap-2">
+                <Button
+                  variant={drawActive ? "default" : "outline"}
+                  size="sm"
+                  onClick={onSetModeDraw}
+                  className="flex-1"
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Draw
+                </Button>
+                <Button
+                  variant={!drawActive ? "default" : "outline"}
+                  size="sm"
+                  onClick={onSetModeErase}
+                  className="flex-1"
+                >
+                  <Eraser className="h-4 w-4 mr-2" />
+                  Erase
+                </Button>
               </div>
-              <img
-                src={state.compositeDataUrl}
-                alt="Canvas screenshot"
-                className="block w-full h-auto border"
-              />
-            </div>
-          ) : null}
+
+              {/* Brush Settings */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Palette className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-sm font-medium">Color</Label>
+                  <Input
+                    type="color"
+                    value={state.strokeColor}
+                    onChange={onColorChange}
+                    className="h-8 w-12 p-1 border rounded"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="h-4 w-4 rounded-full border-2 border-muted-foreground flex items-center justify-center">
+                    <div
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: state.strokeColor }}
+                    />
+                  </div>
+                  <Label className="text-sm font-medium flex-1">Size</Label>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Input
+                      type="range"
+                      min={1}
+                      max={24}
+                      value={state.brushSize}
+                      onChange={onSizeChange}
+                      className="flex-1"
+                    />
+                    <span className="text-xs text-muted-foreground w-6 text-right">
+                      {state.brushSize}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Actions Card */}
+          <Card className="w-80 shadow-lg">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Camera className="h-4 w-4" />
+                Actions
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onClearActive}
+                  className="text-xs"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Clear Active
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onClearAll}
+                  className="text-xs"
+                >
+                  <Trash2 className="h-3 w-3 mr-1" />
+                  Clear All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={captureScreenshot}
+                  className="text-xs"
+                >
+                  <Camera className="h-3 w-3 mr-1" />
+                  Screenshot
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void downloadComposite();
+                  }}
+                  className="text-xs"
+                >
+                  <Download className="h-3 w-3 mr-1" />
+                  Download
+                </Button>
+              </div>
+
+              <div className="pt-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e): void => {
+                    void onFileSelected(e);
+                  }}
+                  className="hidden"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onOpenUpload}
+                  className="w-full text-xs"
+                >
+                  <Upload className="h-3 w-3 mr-2" />
+                  Upload Image
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Layers Card */}
+          <Card className="w-80 shadow-lg">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Layers className="h-4 w-4" />
+                Layers
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="max-h-48 overflow-y-auto space-y-2">
+                {state.layers.map((layer) => {
+                  const isActive = layer.id === activeLayerId;
+                  return (
+                    <div
+                      key={layer.id}
+                      className={`flex items-center gap-2 p-2 rounded-md border transition-colors ${
+                        isActive
+                          ? "bg-primary/10 border-primary/20"
+                          : "bg-muted/50 hover:bg-muted"
+                      }`}
+                    >
+                      <Button
+                        variant={isActive ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => onSelectLayer(layer.id)}
+                        className="flex-1 justify-start text-left h-8 px-2"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              isActive
+                                ? "bg-primary-foreground"
+                                : "bg-muted-foreground"
+                            }`}
+                          />
+                          <span className="truncate text-sm">{layer.name}</span>
+                          {layer.type === "image" && (
+                            <ImageIcon className="h-3 w-3 text-blue-500 flex-shrink-0" />
+                          )}
+                          {(layer as ImageLayer).banana && (
+                            <Banana className="h-3 w-3 text-yellow-500 flex-shrink-0" />
+                          )}
+                        </div>
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onToggleLayer(layer.id)}
+                        className="h-8 w-8 p-0"
+                        title={layer.visible ? "Hide layer" : "Show layer"}
+                      >
+                        {layer.visible ? (
+                          <Eye className="h-3 w-3" />
+                        ) : (
+                          <EyeOff className="h-3 w-3" />
+                        )}
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onRemoveLayer(layer.id)}
+                        disabled={state.layers.length <= 1}
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        title="Delete layer"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onAddLayer}
+                className="w-full"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Layer
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Banana Generation Card */}
+          <Card className="w-80 shadow-lg">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Banana className="h-4 w-4" />
+                Banana AI
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button
+                onClick={onGenerateBanana}
+                disabled={isGenerating}
+                className="w-full bg-yellow-500 hover:bg-yellow-600 text-yellow-950"
+              >
+                <Banana className="h-4 w-4 mr-2" />
+                {isGenerating ? "Generating…" : "Generate Banana Layer"}
+              </Button>
+
+              <div className="space-y-2">
+                <Label htmlFor="bananaPrompt" className="text-sm font-medium">
+                  Prompt
+                </Label>
+                <Input
+                  id="bananaPrompt"
+                  placeholder="banana-fy this image"
+                  value={bananaPrompt}
+                  onChange={(e) => setBananaPrompt(e.target.value)}
+                  className="text-sm"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Preview Card */}
+          {state.compositeDataUrl && (
+            <Card className="w-80 shadow-lg">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Camera className="h-4 w-4" />
+                  Preview
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={state.compositeDataUrl}
+                  alt="Canvas screenshot"
+                  className="w-full h-auto rounded-md border"
+                />
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

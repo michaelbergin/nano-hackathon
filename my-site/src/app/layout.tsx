@@ -13,7 +13,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-dvh antialiased">{children}</body>
+      <body className="min-h-dvh h-dvh overflow-hidden antialiased">
+        {children}
+      </body>
     </html>
   );
 }
