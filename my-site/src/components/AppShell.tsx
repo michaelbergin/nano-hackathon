@@ -102,7 +102,7 @@ export function AppShell({
 
   return (
     <div className="min-h-dvh grid grid-rows-[56px_1fr] grid-cols-1">
-      <header className="h-14 border-b flex items-center gap-3 px-4 bg-background relative z-30">
+      <header className="h-14 border-b flex items-center gap-3 px-4 bg-background relative z-30 touch-manipulation">
         <Sheet open={open} onOpenChange={onOpenChange}>
           <SheetTrigger asChild>
             <Button
@@ -156,7 +156,7 @@ export function AppShell({
                   void submitTitle();
                 }}
                 onKeyDown={onKeyDown}
-                className="px-2 py-1 rounded border text-sm"
+                className="px-2 py-1 rounded border text-base"
                 aria-label="Project name"
               />
             ) : (

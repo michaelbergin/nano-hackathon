@@ -72,6 +72,16 @@
 - Screenshot: `getCanvasScreenshot` composes visible layers to a PNG data URL; latest capture is previewed in UI.
 - Generate: a Generate Banana Layer button posts the composite to `/api/nano-banana` and adds the result as an image layer with a banana badge.
 
+### Mobile & Apple Pencil
+
+- Canvas now optimized for touch and stylus input:
+  - `touch-action: none` on the drawing surface to prevent browser panning/zoom gestures.
+  - Ignores finger touches for drawing; accepts `pointerType` pen and mouse only.
+  - Uses `getCoalescedEvents()` when available for smoother Apple Pencil curves.
+  - Handles `pointercancel` and `lostpointercapture` to gracefully end strokes.
+  - Prevents `contextmenu` on the canvas to avoid long-press menus on iOS.
+- Shell header uses `touch-manipulation` to keep scrolling responsive and reduces accidental zooming.
+
 ### Dev Notes
 
 - Tests via Vitest: from repo root `yarn --cwd my-site test`.

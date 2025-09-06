@@ -1,14 +1,7 @@
 "use client";
 
 import type { JSX, ChangeEvent } from "react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 export type Point2 = [number, number];
 export type PolyLine2 = number[];
@@ -109,7 +102,6 @@ export function boardReducer(
 ): BoardState {
   const log = (message: string, extra?: unknown): void => {
     if (typeof window !== "undefined") {
-      // eslint-disable-next-line no-console
       console.debug(`[CanvasBoard] ${message}`, extra ?? "");
     }
   };
@@ -522,7 +514,7 @@ export function CanvasBoard({
     try {
       const data = JSON.stringify(payload);
       onSave(data);
-    } catch (_e) {
+    } catch {
       // ignore
     }
   }, [state.layers, onSave]);
@@ -640,6 +632,13 @@ export function CanvasBoard({
 
   const onPointerDown = useCallback(
     (evt: PointerEvent): void => {
+      // Only draw with primary pointer, and only for pen or mouse (ignore fingers)
+      if (!evt.isPrimary) {
+        return;
+      }
+      if (evt.pointerType !== "mouse" && evt.pointerType !== "pen") {
+        return;
+      }
       if (evt.button !== 0) {
         return;
       }
@@ -665,15 +664,27 @@ export function CanvasBoard({
       if (!isDrawingRef.current) {
         return;
       }
-      const [x, y] = getRelativePoint(evt);
+      if (!evt.isPrimary) {
+        return;
+      }
       const curr = currentPathRef.current;
       if (!curr) {
         return;
       }
-      currentPathRef.current = {
-        ...curr,
-        points: [...curr.points, x, y],
-      };
+
+      // Prefer coalesced events for smoother Apple Pencil input when available
+      const coalesced = (evt.getCoalescedEvents?.() ?? []) as PointerEvent[];
+      if (coalesced.length > 0) {
+        let points = curr.points;
+        for (const pe of coalesced) {
+          const [cx, cy] = getRelativePoint(pe);
+          points = [...points, cx, cy];
+        }
+        currentPathRef.current = { ...curr, points };
+      } else {
+        const [x, y] = getRelativePoint(evt);
+        currentPathRef.current = { ...curr, points: [...curr.points, x, y] };
+      }
       drawAll();
     },
     [getRelativePoint, drawAll]
@@ -703,13 +714,29 @@ export function CanvasBoard({
     const down = (e: Event): void => onPointerDown(e as PointerEvent);
     const move = (e: Event): void => onPointerMove(e as PointerEvent);
     const up = (e: Event): void => onPointerUp(e as PointerEvent);
+    const cancel = (e: Event): void => {
+      const evt = e as PointerEvent;
+      (evt.target as Element | null)?.releasePointerCapture?.(evt.pointerId);
+      isDrawingRef.current = false;
+      currentPathRef.current = null;
+    };
+    const lostCapture = (e: Event): void => onPointerUp(e as PointerEvent);
+    const preventContext = (e: Event): void => {
+      e.preventDefault();
+    };
     canvas.addEventListener("pointerdown", down);
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel, { passive: false });
+    canvas.addEventListener("lostpointercapture", lostCapture);
+    canvas.addEventListener("contextmenu", preventContext, { passive: false });
     return () => {
       canvas.removeEventListener("pointerdown", down);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      canvas.removeEventListener("lostpointercapture", lostCapture);
+      canvas.removeEventListener("contextmenu", preventContext);
     };
   }, [onPointerDown, onPointerMove, onPointerUp]);
 
@@ -776,7 +803,6 @@ export function CanvasBoard({
     }
     const rect = container.getBoundingClientRect();
     const visibleLayers = state.layers.filter((l) => l.visible);
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     (async () => {
       const dataUrl = await getCanvasScreenshotAsync(
         visibleLayers,
@@ -820,7 +846,7 @@ export function CanvasBoard({
           banana: true,
         });
       }
-    } catch (_e) {
+    } catch {
       // ignore
     } finally {
       setIsGenerating(false);
@@ -835,7 +861,7 @@ export function CanvasBoard({
       <div ref={containerRef} className="absolute inset-0">
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 w-full h-full cursor-crosshair select-none"
+          className="absolute inset-0 w-full h-full cursor-crosshair select-none touch-none"
         />
       </div>
 
