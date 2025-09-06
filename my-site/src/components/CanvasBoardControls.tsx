@@ -1,8 +1,8 @@
 "use client";
 
-import type { JSX } from "react";
+import type { JSX, ChangeEvent, RefObject } from "react";
 import { memo } from "react";
-import type { BoardMode, Layer } from "./CanvasBoard";
+import type { BoardMode, Layer, ImageLayer } from "./CanvasBoard";
 import {
   Pencil,
   Eraser,
@@ -33,7 +33,8 @@ export type CanvasControlsState = {
   layers: Layer[];
   activeLayerId: string;
   compositeDataUrl: string | null;
-  isGenerating?: boolean;
+  isGenerating: boolean;
+  bananaPrompt: string;
 };
 
 export type CanvasControlsActions = {
@@ -47,258 +48,321 @@ export type CanvasControlsActions = {
   clearActive: () => void;
   clearAll: () => void;
   captureComposite: () => void;
+  downloadComposite: () => Promise<void>;
+  openUpload: () => void;
   generateBanana: () => Promise<void>;
+  setBananaPrompt: (prompt: string) => void;
 };
 
 export interface CanvasBoardControlsProps {
   state: CanvasControlsState;
   actions: CanvasControlsActions;
+  fileInputRef: RefObject<HTMLInputElement | null>;
 }
 
 function CanvasBoardControlsBase({
   state,
   actions,
+  fileInputRef,
 }: CanvasBoardControlsProps): JSX.Element {
+  const drawActive = state.mode === "draw";
+  const activeLayerId = state.activeLayerId;
+
   return (
     <>
-      {/* Left column: Tools, Actions (without Generate), Preview */}
-      <div className="absolute left-4 top-4 z-10 flex flex-col gap-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
-        {/* Tools Card */}
-        <Card className="w-80 shadow-lg">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Settings className="h-4 w-4" />
-              Tools
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Mode Selection */}
-            <div className="flex gap-2">
-              <Button
-                variant={state.mode === "draw" ? "default" : "outline"}
-                size="sm"
-                onClick={() => actions.setMode("draw")}
-                className="flex-1"
-              >
-                <Pencil className="h-4 w-4 mr-2" />
-                Draw
-              </Button>
-              <Button
-                variant={state.mode === "erase" ? "default" : "outline"}
-                size="sm"
-                onClick={() => actions.setMode("erase")}
-                className="flex-1"
-              >
-                <Eraser className="h-4 w-4 mr-2" />
-                Erase
-              </Button>
-            </div>
-
-            {/* Brush Settings */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <Palette className="h-4 w-4 text-muted-foreground" />
-                <Label className="text-sm font-medium">Color</Label>
-                <Input
-                  type="color"
-                  value={state.strokeColor}
-                  onChange={(e) => actions.setColor(e.target.value)}
-                  className="h-8 w-12 p-1 border rounded"
-                  aria-label="Brush color"
-                />
+      {/* Left column: Tools, Actions, Preview */}
+      <div className="pointer-events-none absolute top-4 left-4 z-10">
+        <div className="pointer-events-auto flex flex-col gap-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
+          {/* Tools Card */}
+          <Card className="w-80 shadow-lg">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Settings className="h-4 w-4" />
+                Tools
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Mode Selection */}
+              <div className="flex gap-2">
+                <Button
+                  variant={drawActive ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => actions.setMode("draw")}
+                  className="flex-1"
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Draw
+                </Button>
+                <Button
+                  variant={!drawActive ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => actions.setMode("erase")}
+                  className="flex-1"
+                >
+                  <Eraser className="h-4 w-4 mr-2" />
+                  Erase
+                </Button>
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="h-4 w-4 rounded-full border-2 border-muted-foreground flex items-center justify-center">
-                  <div
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: state.strokeColor }}
-                  />
-                </div>
-                <Label className="text-sm font-medium flex-1">Size</Label>
-                <div className="flex items-center gap-2 min-w-0">
+              {/* Brush Settings */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Palette className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-sm font-medium">Color</Label>
                   <Input
-                    type="range"
-                    min={1}
-                    max={24}
-                    value={state.brushSize}
-                    onChange={(e) =>
-                      actions.setBrushSize(Number(e.target.value))
+                    type="color"
+                    value={state.strokeColor}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                      actions.setColor(e.target.value)
                     }
-                    className="flex-1"
-                    aria-label="Brush size"
+                    className="h-8 w-12 p-1 border rounded"
                   />
-                  <span className="text-xs text-muted-foreground w-6 text-right">
-                    {state.brushSize}
-                  </span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="h-4 w-4 rounded-full border-2 border-muted-foreground flex items-center justify-center">
+                    <div
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: state.strokeColor }}
+                    />
+                  </div>
+                  <Label className="text-sm font-medium flex-1">Size</Label>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Input
+                      type="range"
+                      min={1}
+                      max={24}
+                      value={state.brushSize}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        actions.setBrushSize(Number(e.target.value))
+                      }
+                      className="flex-1"
+                    />
+                    <span className="text-xs text-muted-foreground w-6 text-right">
+                      {state.brushSize}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Actions Card (Generate moved to right column) */}
-        <Card className="w-80 shadow-lg">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Camera className="h-4 w-4" />
-              Actions
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={actions.clearActive}
-                className="text-xs"
-              >
-                <RotateCcw className="h-3 w-3 mr-1" />
-                Clear Active
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={actions.clearAll}
-                className="text-xs"
-              >
-                <Trash2 className="h-3 w-3 mr-1" />
-                Clear All
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={actions.captureComposite}
-                className="text-xs"
-              >
-                <Camera className="h-3 w-3 mr-1" />
-                Screenshot
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Preview Card */}
-        {state.compositeDataUrl && (
+          {/* Actions Card */}
           <Card className="w-80 shadow-lg">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Camera className="h-4 w-4" />
-                Preview
+                Actions
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <img
-                src={state.compositeDataUrl}
-                alt="Canvas screenshot"
-                className="w-full h-auto rounded-md border"
-              />
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={actions.clearActive}
+                  className="text-xs"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Clear Active
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={actions.clearAll}
+                  className="text-xs"
+                >
+                  <Trash2 className="h-3 w-3 mr-1" />
+                  Clear All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={actions.captureComposite}
+                  className="text-xs"
+                >
+                  <Camera className="h-3 w-3 mr-1" />
+                  Screenshot
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void actions.downloadComposite();
+                  }}
+                  className="text-xs"
+                >
+                  <Download className="h-3 w-3 mr-1" />
+                  Download
+                </Button>
+              </div>
+
+              <div className="pt-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={actions.openUpload}
+                  className="w-full text-xs"
+                >
+                  <Upload className="h-3 w-3 mr-2" />
+                  Upload Image
+                </Button>
+              </div>
             </CardContent>
           </Card>
-        )}
+
+          {/* Preview Card */}
+          {state.compositeDataUrl && (
+            <Card className="w-80 shadow-lg">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Camera className="h-4 w-4" />
+                  Preview
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={state.compositeDataUrl}
+                  alt="Canvas screenshot"
+                  className="w-full h-auto rounded-md border"
+                />
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
 
-      {/* Right column: Layers and Generate, vertically centered */}
-      <div className="absolute right-4 top-1/2 z-10 flex w-80 -translate-y-1/2 flex-col gap-4">
-        {/* Layers Card */}
-        <Card className="w-80 shadow-lg">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Layers className="h-4 w-4" />
-              Layers
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => actions.addLayer()}
-              className="w-full"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Layer
-            </Button>
+      {/* Right column: Layers and Banana AI, vertically centered */}
+      <div className="pointer-events-none absolute right-4 top-1/2 z-10 -translate-y-1/2">
+        <div className="pointer-events-auto flex w-80 flex-col gap-4">
+          {/* Layers Card */}
+          <Card className="w-80 shadow-lg">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Layers className="h-4 w-4" />
+                Layers
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="max-h-48 overflow-y-auto space-y-2">
+                {state.layers.map((layer) => {
+                  const isActive = layer.id === activeLayerId;
+                  return (
+                    <div
+                      key={layer.id}
+                      className={`flex items-center gap-2 p-2 rounded-md border transition-colors ${
+                        isActive
+                          ? "bg-primary/10 border-primary/20"
+                          : "bg-muted/50 hover:bg-muted"
+                      }`}
+                    >
+                      <Button
+                        variant={isActive ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => actions.selectLayer(layer.id)}
+                        className="flex-1 justify-start text-left h-8 px-2"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              isActive
+                                ? "bg-primary-foreground"
+                                : "bg-muted-foreground"
+                            }`}
+                          />
+                          <span className="truncate text-sm">{layer.name}</span>
+                          {layer.type === "image" && (
+                            <ImageIcon className="h-3 w-3 text-blue-500 flex-shrink-0" />
+                          )}
+                          {(layer as ImageLayer).banana && (
+                            <Banana className="h-3 w-3 text-yellow-500 flex-shrink-0" />
+                          )}
+                        </div>
+                      </Button>
 
-            <div className="max-h-48 overflow-y-auto space-y-2">
-              {state.layers.map((l) => (
-                <div
-                  key={l.id}
-                  className={`flex items-center gap-2 p-2 rounded-md border transition-colors ${
-                    state.activeLayerId === l.id
-                      ? "bg-primary/10 border-primary/20"
-                      : "bg-muted/50 hover:bg-muted"
-                  }`}
-                >
-                  <Button
-                    variant={state.activeLayerId === l.id ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => actions.selectLayer(l.id)}
-                    className="flex-1 justify-start text-left h-8 px-2"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div
-                        className={`w-2 h-2 rounded-full ${
-                          state.activeLayerId === l.id
-                            ? "bg-primary-foreground"
-                            : "bg-muted-foreground"
-                        }`}
-                      />
-                      <span className="truncate text-sm">{l.name}</span>
-                      {l.type === "image" && (
-                        <ImageIcon className="h-3 w-3 text-blue-500 flex-shrink-0" />
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => actions.toggleLayerVisibility(layer.id)}
+                        className="h-8 w-8 p-0"
+                        title={layer.visible ? "Hide layer" : "Show layer"}
+                      >
+                        {layer.visible ? (
+                          <Eye className="h-3 w-3" />
+                        ) : (
+                          <EyeOff className="h-3 w-3" />
+                        )}
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => actions.removeLayer(layer.id)}
+                        disabled={state.layers.length <= 1}
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        title="Delete layer"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
                     </div>
-                  </Button>
+                  );
+                })}
+              </div>
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => actions.toggleLayerVisibility(l.id)}
-                    className="h-8 w-8 p-0"
-                    title={l.visible ? "Hide layer" : "Show layer"}
-                  >
-                    {l.visible ? (
-                      <Eye className="h-3 w-3" />
-                    ) : (
-                      <EyeOff className="h-3 w-3" />
-                    )}
-                  </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => actions.addLayer()}
+                className="w-full"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Layer
+              </Button>
+            </CardContent>
+          </Card>
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => actions.removeLayer(l.id)}
-                    className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                    title="Delete layer"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+          {/* Banana Generation Card */}
+          <Card className="w-80 shadow-lg">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Banana className="h-4 w-4" />
+                Banana AI
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button
+                onClick={actions.generateBanana}
+                disabled={state.isGenerating}
+                className="w-full bg-yellow-500 hover:bg-yellow-600 text-yellow-950"
+              >
+                <Banana className="h-4 w-4 mr-2" />
+                {state.isGenerating ? "Generating…" : "Generate Banana Layer"}
+              </Button>
 
-        {/* Generate Card */}
-        <Card className="w-80 shadow-lg">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Banana className="h-4 w-4" />
-              Generate
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={actions.generateBanana}
-              disabled={Boolean(state.isGenerating)}
-              className="w-full"
-            >
-              {state.isGenerating ? "Generating…" : "Generate"}
-            </Button>
-          </CardContent>
-        </Card>
+              <div className="space-y-2">
+                <Label htmlFor="bananaPrompt" className="text-sm font-medium">
+                  Prompt
+                </Label>
+                <Input
+                  id="bananaPrompt"
+                  placeholder="banana-fy this image"
+                  value={state.bananaPrompt}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    actions.setBananaPrompt(e.target.value)
+                  }
+                  className="text-sm"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </>
   );

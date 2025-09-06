@@ -2,28 +2,15 @@
 
 import type { JSX, ChangeEvent } from "react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import CanvasBoardControls from "./CanvasBoardControls";
 import {
-  Pencil,
-  Eraser,
-  Palette,
-  Trash2,
-  RotateCcw,
-  Camera,
-  Download,
-  Upload,
-  Plus,
-  Eye,
-  EyeOff,
-  X,
-  Banana,
-  Layers,
-  Settings,
-  Image as ImageIcon,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+  boardReducer,
+  createLayer,
+  drawPathOnContext,
+  generateLayerId,
+  getCanvasScreenshotAsync,
+} from "./canvasUtils";
+// UI components integrated with CanvasBoardControls
 
 export type Point2 = [number, number];
 export type PolyLine2 = number[];
@@ -89,344 +76,6 @@ export type BoardAction =
 interface CanvasBoardProps {
   initialData?: string;
   onSave?: (data: string) => void;
-}
-
-function generateLayerId(): string {
-  return `layer-${Date.now().toString(36)}-${Math.random()
-    .toString(36)
-    .slice(2, 8)}`;
-}
-
-export function createLayer(name: string): VectorLayer {
-  return {
-    id: generateLayerId(),
-    name,
-    visible: true,
-    type: "vector",
-    strokes: [],
-  };
-}
-
-function ensureActiveLayerId(layers: Layer[], currentId: string): string {
-  const has = layers.some((l) => l.id === currentId);
-  if (has && layers.length > 0) {
-    return currentId;
-  }
-  return layers.length > 0 ? layers[0].id : generateLayerId();
-}
-
-/**
- * Reducer for canvas board state. Logs key transitions to aid debugging.
- */
-export function boardReducer(
-  state: BoardState,
-  action: BoardAction
-): BoardState {
-  const log = (message: string, extra?: unknown): void => {
-    if (typeof window !== "undefined") {
-      console.debug(`[CanvasBoard] ${message}`, extra ?? "");
-    }
-  };
-  switch (action.type) {
-    case "ADD_LAYER": {
-      const name = action.name ?? `Layer ${state.layers.length + 1}`;
-      const nextLayer = createLayer(name);
-      const next = {
-        ...state,
-        layers: [...state.layers, nextLayer],
-        activeLayerId: nextLayer.id,
-      };
-      log("ADD_LAYER", {
-        active: next.activeLayerId,
-        layers: next.layers.map((l) => ({
-          id: l.id,
-          type: l.type,
-          visible: l.visible,
-        })),
-      });
-      return next;
-    }
-    case "ADD_IMAGE_LAYER_TOP": {
-      const name = action.name ?? `Layer ${state.layers.length + 1}`;
-      const imageLayer: ImageLayer = {
-        id: generateLayerId(),
-        name,
-        visible: true,
-        type: "image",
-        imageSrc: action.imageSrc,
-        banana: action.banana ?? false,
-      };
-      const next = {
-        ...state,
-        layers: [...state.layers, imageLayer],
-        activeLayerId: imageLayer.id,
-      };
-      log("ADD_IMAGE_LAYER_TOP", {
-        active: next.activeLayerId,
-        layers: next.layers.map((l) => ({
-          id: l.id,
-          type: l.type,
-          visible: l.visible,
-        })),
-      });
-      return next;
-    }
-    case "REMOVE_LAYER": {
-      const remaining = state.layers.filter((l) => l.id !== action.id);
-      const nextLayers =
-        remaining.length > 0 ? remaining : [createLayer("Layer 1")];
-      const nextActive = ensureActiveLayerId(
-        nextLayers,
-        state.activeLayerId === action.id ? "" : state.activeLayerId
-      );
-      const next = { ...state, layers: nextLayers, activeLayerId: nextActive };
-      log("REMOVE_LAYER", {
-        removed: action.id,
-        active: next.activeLayerId,
-        layers: next.layers.map((l) => ({
-          id: l.id,
-          type: l.type,
-          visible: l.visible,
-        })),
-      });
-      return next;
-    }
-    case "SELECT_LAYER": {
-      // Ensure selected layer is visible
-      const nextLayers = state.layers.map((l) =>
-        l.id === action.id ? { ...l, visible: true } : l
-      );
-      const next = { ...state, layers: nextLayers, activeLayerId: action.id };
-      log("SELECT_LAYER", { active: next.activeLayerId });
-      return next;
-    }
-    case "TOGGLE_LAYER_VISIBILITY": {
-      const next = {
-        ...state,
-        layers: state.layers.map((l) =>
-          l.id === action.id ? { ...l, visible: !l.visible } : l
-        ),
-      };
-      log("TOGGLE_LAYER_VISIBILITY", {
-        id: action.id,
-        nowVisible:
-          next.layers.find((l) => l.id === action.id)?.visible ?? false,
-      });
-      return next;
-    }
-    case "RENAME_LAYER": {
-      const next = {
-        ...state,
-        layers: state.layers.map((l) =>
-          l.id === action.id ? { ...l, name: action.name } : l
-        ),
-      };
-      log("RENAME_LAYER", { id: action.id, name: action.name });
-      return next;
-    }
-    case "ADD_STROKE_TO_ACTIVE": {
-      const idx = state.layers.findIndex((l) => l.id === state.activeLayerId);
-      if (idx === -1) {
-        return state;
-      }
-      const target = state.layers[idx];
-      if (target.type !== "vector") {
-        return state;
-      }
-      const updated: VectorLayer = {
-        ...target,
-        strokes: [...target.strokes, action.stroke],
-      };
-      const nextLayers = state.layers.slice();
-      nextLayers[idx] = updated;
-      const next = { ...state, layers: nextLayers };
-      log("ADD_STROKE_TO_ACTIVE", {
-        active: next.activeLayerId,
-        strokePoints: action.stroke.points.length,
-      });
-      return next;
-    }
-    case "ENSURE_ACTIVE_VECTOR_LAYER": {
-      const currentIndex = state.layers.findIndex(
-        (l) => l.id === state.activeLayerId
-      );
-      const current =
-        currentIndex >= 0 ? state.layers[currentIndex] : undefined;
-      if (current && current.type === "vector") {
-        return state;
-      }
-      const nextLayer = createLayer(`Layer ${state.layers.length + 1}`);
-      const next = {
-        ...state,
-        layers: [...state.layers, nextLayer],
-        activeLayerId: nextLayer.id,
-      };
-      log("ENSURE_ACTIVE_VECTOR_LAYER", { active: next.activeLayerId });
-      return next;
-    }
-    case "CLEAR_ACTIVE_LAYER": {
-      const nextLayers = state.layers.map((l) => {
-        if (l.id !== state.activeLayerId) {
-          return l;
-        }
-        if (l.type === "vector") {
-          return { ...l, strokes: [] };
-        }
-        return l;
-      });
-      const next = { ...state, layers: nextLayers };
-      log("CLEAR_ACTIVE_LAYER", { active: next.activeLayerId });
-      return next;
-    }
-    case "CLEAR_ALL_LAYERS": {
-      const next = {
-        ...state,
-        layers: state.layers.map((l) =>
-          l.type === "vector" ? { ...l, strokes: [] } : l
-        ),
-      };
-      log("CLEAR_ALL_LAYERS");
-      return next;
-    }
-    case "SET_MODE": {
-      const next = { ...state, mode: action.mode };
-      log("SET_MODE", { mode: next.mode });
-      return next;
-    }
-    case "SET_COLOR": {
-      const next = { ...state, strokeColor: action.color };
-      log("SET_COLOR", { color: next.strokeColor });
-      return next;
-    }
-    case "SET_BRUSH_SIZE": {
-      const next = { ...state, brushSize: action.size };
-      log("SET_BRUSH_SIZE", { size: next.brushSize });
-      return next;
-    }
-    case "LOAD_FROM_DATA": {
-      const layers =
-        action.layers.length > 0 ? action.layers : [createLayer("Layer 1")];
-      const next = {
-        ...state,
-        layers,
-        activeLayerId: layers[0].id,
-      };
-      log("LOAD_FROM_DATA", {
-        active: next.activeLayerId,
-        count: layers.length,
-      });
-      return next;
-    }
-    case "SET_COMPOSITE": {
-      const next = { ...state, compositeDataUrl: action.dataUrl };
-      log("SET_COMPOSITE", { hasData: Boolean(next.compositeDataUrl) });
-      return next;
-    }
-    default: {
-      return state;
-    }
-  }
-}
-
-function drawPathOnContext(
-  ctx: CanvasRenderingContext2D,
-  stroke: PathStroke
-): void {
-  const polyline = stroke.points;
-  if (polyline.length < 4) {
-    return;
-  }
-  ctx.save();
-  ctx.globalCompositeOperation = stroke.erase
-    ? "destination-out"
-    : "source-over";
-  ctx.lineWidth = stroke.size;
-  ctx.strokeStyle = stroke.color;
-  ctx.beginPath();
-  ctx.moveTo(polyline[0], polyline[1]);
-  for (let i = 2; i < polyline.length; i += 2) {
-    ctx.lineTo(polyline[i], polyline[i + 1]);
-  }
-  ctx.stroke();
-  ctx.restore();
-}
-
-export function getCanvasScreenshot(
-  layers: Layer[],
-  width: number,
-  height: number,
-  dprInput?: number
-): string {
-  const dpr = Math.max(
-    1,
-    Math.floor(
-      dprInput ??
-        (typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1)
-    )
-  );
-  const off = document.createElement("canvas");
-  off.width = Math.max(1, Math.floor(width * dpr));
-  off.height = Math.max(1, Math.floor(height * dpr));
-  const ctx = off.getContext("2d");
-  if (!ctx) {
-    return "";
-  }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-  for (const layer of layers) {
-    if (!layer.visible) {
-      continue;
-    }
-    if (layer.type === "vector") {
-      for (const stroke of layer.strokes) {
-        drawPathOnContext(ctx, stroke);
-      }
-    }
-  }
-  return off.toDataURL("image/png");
-}
-
-async function getCanvasScreenshotAsync(
-  layers: Layer[],
-  width: number,
-  height: number,
-  dprInput?: number
-): Promise<string> {
-  const dpr = Math.max(
-    1,
-    Math.floor(
-      dprInput ??
-        (typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1)
-    )
-  );
-  const off = document.createElement("canvas");
-  off.width = Math.max(1, Math.floor(width * dpr));
-  off.height = Math.max(1, Math.floor(height * dpr));
-  const ctx = off.getContext("2d");
-  if (!ctx) {
-    return "";
-  }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-  for (const layer of layers) {
-    if (!layer.visible) {
-      continue;
-    }
-    if (layer.type === "image") {
-      const img = new window.Image();
-      img.crossOrigin = "anonymous";
-      img.src = layer.imageSrc;
-      await img.decode().catch(() => undefined);
-      ctx.drawImage(img, 0, 0, width, height);
-    } else {
-      for (const stroke of layer.strokes) {
-        drawPathOnContext(ctx, stroke);
-      }
-    }
-  }
-  return off.toDataURL("image/png");
 }
 
 export function CanvasBoard({
@@ -796,6 +445,11 @@ export function CanvasBoard({
     };
   }, [onPointerDown, onPointerMove, onPointerUp]);
 
+  // UI state for controls
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [bananaPrompt, setBananaPrompt] = useState<string>("banana-fy");
+
+  // Essential functions for controls
   const onClearActive = useCallback((): void => {
     dispatch({ type: "CLEAR_ACTIVE_LAYER" });
     currentPathRef.current = null;
@@ -807,49 +461,6 @@ export function CanvasBoard({
     currentPathRef.current = null;
     drawAll();
   }, [drawAll]);
-
-  const onColorChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>): void => {
-      dispatch({ type: "SET_COLOR", color: e.target.value });
-    },
-    []
-  );
-
-  const onSizeChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>): void => {
-      const next = Number(e.target.value);
-      const clamped = Number.isFinite(next)
-        ? Math.max(1, Math.min(24, next))
-        : 4;
-      dispatch({ type: "SET_BRUSH_SIZE", size: clamped });
-      resizeCanvas();
-    },
-    [resizeCanvas]
-  );
-
-  const onAddLayer = useCallback((): void => {
-    dispatch({ type: "ADD_LAYER" });
-  }, []);
-
-  const onRemoveLayer = useCallback((id: string): void => {
-    dispatch({ type: "REMOVE_LAYER", id });
-  }, []);
-
-  const onSelectLayer = useCallback((id: string): void => {
-    dispatch({ type: "SELECT_LAYER", id });
-  }, []);
-
-  const onToggleLayer = useCallback((id: string): void => {
-    dispatch({ type: "TOGGLE_LAYER_VISIBILITY", id });
-  }, []);
-
-  const onSetModeDraw = useCallback((): void => {
-    dispatch({ type: "SET_MODE", mode: "draw" });
-  }, []);
-
-  const onSetModeErase = useCallback((): void => {
-    dispatch({ type: "SET_MODE", mode: "erase" });
-  }, []);
 
   const captureScreenshot = useCallback((): void => {
     const container = containerRef.current;
@@ -868,9 +479,6 @@ export function CanvasBoard({
       dispatch({ type: "SET_COMPOSITE", dataUrl });
     })();
   }, [state.layers]);
-
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [bananaPrompt, setBananaPrompt] = useState<string>("banana-fy");
 
   const downloadComposite = useCallback(async (): Promise<void> => {
     const container = containerRef.current;
@@ -1040,8 +648,35 @@ export function CanvasBoard({
     }
   }, [isGenerating, state.layers, bananaPrompt]);
 
-  const drawActive = state.mode === "draw";
-  const activeLayerId = state.activeLayerId;
+  // Create controls state and actions
+  const controlsState = {
+    mode: state.mode,
+    strokeColor: state.strokeColor,
+    brushSize: state.brushSize,
+    layers: state.layers,
+    activeLayerId: state.activeLayerId,
+    compositeDataUrl: state.compositeDataUrl,
+    isGenerating,
+    bananaPrompt,
+  };
+
+  const controlsActions = {
+    addLayer: () => dispatch({ type: "ADD_LAYER" }),
+    removeLayer: (id: string) => dispatch({ type: "REMOVE_LAYER", id }),
+    selectLayer: (id: string) => dispatch({ type: "SELECT_LAYER", id }),
+    toggleLayerVisibility: (id: string) =>
+      dispatch({ type: "TOGGLE_LAYER_VISIBILITY", id }),
+    setMode: (mode: BoardMode) => dispatch({ type: "SET_MODE", mode }),
+    setColor: (color: string) => dispatch({ type: "SET_COLOR", color }),
+    setBrushSize: (size: number) => dispatch({ type: "SET_BRUSH_SIZE", size }),
+    clearActive: onClearActive,
+    clearAll: onClearAll,
+    captureComposite: captureScreenshot,
+    downloadComposite,
+    openUpload: onOpenUpload,
+    generateBanana: onGenerateBanana,
+    setBananaPrompt,
+  };
 
   return (
     <div className="relative w-full h-full overflow-hidden">
@@ -1052,291 +687,23 @@ export function CanvasBoard({
         />
       </div>
 
-      <div className="pointer-events-none absolute top-4 left-4 z-10">
-        <div className="pointer-events-auto flex flex-col gap-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
-          {/* Tools Card */}
-          <Card className="w-80 shadow-lg">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Settings className="h-4 w-4" />
-                Tools
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Mode Selection */}
-              <div className="flex gap-2">
-                <Button
-                  variant={drawActive ? "default" : "outline"}
-                  size="sm"
-                  onClick={onSetModeDraw}
-                  className="flex-1"
-                >
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Draw
-                </Button>
-                <Button
-                  variant={!drawActive ? "default" : "outline"}
-                  size="sm"
-                  onClick={onSetModeErase}
-                  className="flex-1"
-                >
-                  <Eraser className="h-4 w-4 mr-2" />
-                  Erase
-                </Button>
-              </div>
+      {/* Canvas Controls */}
+      <CanvasBoardControls
+        state={controlsState}
+        actions={controlsActions}
+        fileInputRef={fileInputRef}
+      />
 
-              {/* Brush Settings */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <Palette className="h-4 w-4 text-muted-foreground" />
-                  <Label className="text-sm font-medium">Color</Label>
-                  <Input
-                    type="color"
-                    value={state.strokeColor}
-                    onChange={onColorChange}
-                    className="h-8 w-12 p-1 border rounded"
-                  />
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="h-4 w-4 rounded-full border-2 border-muted-foreground flex items-center justify-center">
-                    <div
-                      className="h-2 w-2 rounded-full"
-                      style={{ backgroundColor: state.strokeColor }}
-                    />
-                  </div>
-                  <Label className="text-sm font-medium flex-1">Size</Label>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Input
-                      type="range"
-                      min={1}
-                      max={24}
-                      value={state.brushSize}
-                      onChange={onSizeChange}
-                      className="flex-1"
-                    />
-                    <span className="text-xs text-muted-foreground w-6 text-right">
-                      {state.brushSize}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Actions Card */}
-          <Card className="w-80 shadow-lg">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Camera className="h-4 w-4" />
-                Actions
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onClearActive}
-                  className="text-xs"
-                >
-                  <RotateCcw className="h-3 w-3 mr-1" />
-                  Clear Active
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onClearAll}
-                  className="text-xs"
-                >
-                  <Trash2 className="h-3 w-3 mr-1" />
-                  Clear All
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={captureScreenshot}
-                  className="text-xs"
-                >
-                  <Camera className="h-3 w-3 mr-1" />
-                  Screenshot
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    void downloadComposite();
-                  }}
-                  className="text-xs"
-                >
-                  <Download className="h-3 w-3 mr-1" />
-                  Download
-                </Button>
-              </div>
-
-              <div className="pt-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={(e): void => {
-                    void onFileSelected(e);
-                  }}
-                  className="hidden"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onOpenUpload}
-                  className="w-full text-xs"
-                >
-                  <Upload className="h-3 w-3 mr-2" />
-                  Upload Image
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Layers Card */}
-          <Card className="w-80 shadow-lg">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Layers className="h-4 w-4" />
-                Layers
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="max-h-48 overflow-y-auto space-y-2">
-                {state.layers.map((layer) => {
-                  const isActive = layer.id === activeLayerId;
-                  return (
-                    <div
-                      key={layer.id}
-                      className={`flex items-center gap-2 p-2 rounded-md border transition-colors ${
-                        isActive
-                          ? "bg-primary/10 border-primary/20"
-                          : "bg-muted/50 hover:bg-muted"
-                      }`}
-                    >
-                      <Button
-                        variant={isActive ? "default" : "ghost"}
-                        size="sm"
-                        onClick={() => onSelectLayer(layer.id)}
-                        className="flex-1 justify-start text-left h-8 px-2"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div
-                            className={`w-2 h-2 rounded-full ${
-                              isActive
-                                ? "bg-primary-foreground"
-                                : "bg-muted-foreground"
-                            }`}
-                          />
-                          <span className="truncate text-sm">{layer.name}</span>
-                          {layer.type === "image" && (
-                            <ImageIcon className="h-3 w-3 text-blue-500 flex-shrink-0" />
-                          )}
-                          {(layer as ImageLayer).banana && (
-                            <Banana className="h-3 w-3 text-yellow-500 flex-shrink-0" />
-                          )}
-                        </div>
-                      </Button>
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onToggleLayer(layer.id)}
-                        className="h-8 w-8 p-0"
-                        title={layer.visible ? "Hide layer" : "Show layer"}
-                      >
-                        {layer.visible ? (
-                          <Eye className="h-3 w-3" />
-                        ) : (
-                          <EyeOff className="h-3 w-3" />
-                        )}
-                      </Button>
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onRemoveLayer(layer.id)}
-                        disabled={state.layers.length <= 1}
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                        title="Delete layer"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onAddLayer}
-                className="w-full"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Layer
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Banana Generation Card */}
-          <Card className="w-80 shadow-lg">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Banana className="h-4 w-4" />
-                Banana AI
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button
-                onClick={onGenerateBanana}
-                disabled={isGenerating}
-                className="w-full bg-yellow-500 hover:bg-yellow-600 text-yellow-950"
-              >
-                <Banana className="h-4 w-4 mr-2" />
-                {isGenerating ? "Generating…" : "Generate Banana Layer"}
-              </Button>
-
-              <div className="space-y-2">
-                <Label htmlFor="bananaPrompt" className="text-sm font-medium">
-                  Prompt
-                </Label>
-                <Input
-                  id="bananaPrompt"
-                  placeholder="banana-fy this image"
-                  value={bananaPrompt}
-                  onChange={(e) => setBananaPrompt(e.target.value)}
-                  className="text-sm"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Preview Card */}
-          {state.compositeDataUrl && (
-            <Card className="w-80 shadow-lg">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Camera className="h-4 w-4" />
-                  Preview
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={state.compositeDataUrl}
-                  alt="Canvas screenshot"
-                  className="w-full h-auto rounded-md border"
-                />
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
+      {/* Hidden file input for upload functionality */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={(e): void => {
+          void onFileSelected(e);
+        }}
+        className="hidden"
+      />
     </div>
   );
 }

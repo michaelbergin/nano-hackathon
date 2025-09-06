@@ -1,0 +1,46 @@
+# Global OS/editor
+.DS_Store
+.idea/
+.vscode/
+
+# Node
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Package manager locks (we use yarn)
+package-lock.json
+pnpm-lock.yaml
+
+# Next.js
+.next/
+out/
+.vercel/
+.turbo/
+.swc/
+
+# Testing/coverage
+coverage/
+.nyc_output/
+.eslintcache
+
+# Env files (keep an example instead)
+.env
+.env.*
+!.env.example
+
+# Prisma/SQLite dev databases
+prisma/*.db
+prisma/*.db-journal
+**/prisma/*.db
+**/prisma/*.db-journal
+
+# Misc build output
+dist/
+build/
+tmp/
+temp/
+

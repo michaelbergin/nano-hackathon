@@ -6,7 +6,7 @@ import type {
   ImageLayer,
   Layer,
 } from "./CanvasBoard";
-import { boardReducer, createLayer } from "./CanvasBoard";
+import { boardReducer, createLayer } from "./canvasUtils";
 
 function initialState(): BoardState {
   const layer = createLayer("Layer 1");

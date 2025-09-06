@@ -191,11 +191,24 @@ Signed uploads (fallback when no unsigned preset):
 - Prompt input: A shadcn `Input` labeled "Prompt" allows changing the text sent to generation. Default placeholder is `banana-fy` and initial value is `banana-fy`.
 - Result: The returned image URL is added as a topmost image layer with a yellow "banana" badge. Image layers are persisted in the same `layers` array with `{ type: "image", imageSrc, banana }`.
 
-### Canvas Controls Extraction (CanvasBoardControls)
+### Canvas Controls Extraction (CanvasBoardControls) ✅ COMPLETED
 
-Goal: Move all canvas overlay controls and user-triggered actions out of `src/components/CanvasBoard.tsx` into `src/components/CanvasBoardControls.tsx`, keeping DOM/drawing/persistence in `CanvasBoard`.
+**Goal**: Move all canvas overlay controls and user-triggered actions out of `src/components/CanvasBoard.tsx` into `src/components/CanvasBoardControls.tsx`, keeping DOM/drawing/persistence in `CanvasBoard`.
 
-API:
+**Status**: ✅ Complete - All UI controls have been successfully extracted to CanvasBoardControls.tsx
+
+**Changes Made**:
+
+- ✅ Created complete CanvasBoardControls.tsx with all features from CanvasBoard.tsx
+- ✅ Added all missing actions: download, upload, banana prompt, layer management
+- ✅ Implemented left-aligned single column layout matching original design
+- ✅ Added proper TypeScript types for state and actions
+- ✅ Included banana badge display and all layer functionality
+- ✅ Removed entire legacy left-hand menu from CanvasBoard.tsx
+- ✅ Cleaned up unused imports and callback functions
+- ✅ Fixed all linting errors
+
+**API**:
 
 - Props: `{ state, actions }`
 - `state`: `{ mode, strokeColor, brushSize, layers, activeLayerId, compositeDataUrl, isGenerating }`
@@ -227,3 +240,32 @@ Acceptance:
   - Left: `left-4 top-4 flex-col gap-4`
   - Right: `right-4 top-1/2 -translate-y-1/2 flex-col gap-4`
   - Generate button moved out of Actions and into a new right-side "Generate" card.
+
+## Creation Flow & Header Updates
+
+### Quick Create (Untitled)
+
+- A quick-create icon is now in the header next to the `Banananano` brand.
+- Clicking it sends `POST /api/projects` with `{ name: "untitled" }` and redirects to `/create?id=<projectId>`.
+- File: `src/components/Header.tsx` (uses a `Plus` icon button and `fetch` with `credentials: "include"`).
+
+### Centered Project Name in Header
+
+- When a project is loaded, its name appears centered in the header.
+- Files: `src/components/Header.tsx` (absolute center overlay), consumed via `AppShell` props from project pages.
+
+### Create Page Uses Project Context
+
+- `/create` now requires a `?id=<projectId>` query param, validates auth, loads the project, and renders `ProjectCanvas` with persistence.
+- File: `src/app/create/page.tsx`.
+- Behavior mirrors `projects/[id]` page: saves canvas to `PATCH /api/projects/[id]`.
+
+### New Project Route Behavior
+
+- `/new` now auto-creates an `untitled` project on mount and redirects to `/create?id=<projectId>`.
+- File: `src/app/new/page.tsx`.
+
+### Navigation Summary
+
+- Links: `New Project` (`/new`), `Create` (`/create?id=...`), `Projects` (`/projects`).
+- Header brand area includes a quick-create icon for fast entry to a new canvas.

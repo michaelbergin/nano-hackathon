@@ -1,6 +1,8 @@
 "use client";
 
 import type { JSX } from "react";
+import { useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Menu, User, LogOut, Plus, FileText, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,6 +34,26 @@ interface HeaderProps {
  * Header component with branding, navigation menu, and user actions
  */
 export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
+  const router = useRouter();
+
+  const handleCreateUntitled = useCallback(async (): Promise<void> => {
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "untitled" }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        return;
+      }
+      const data = (await res.json()) as { project: { id: number } };
+      router.push(`/create?id=${data.project.id}`);
+    } catch {
+      // noop
+    }
+  }, [router]);
+
   return (
     <header className="h-14 border-b flex items-center gap-2 sm:gap-3 px-2 sm:px-4 bg-background relative z-30 touch-manipulation">
       {/* Navigation Menu */}
@@ -69,21 +91,32 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
         </SheetContent>
       </Sheet>
 
-      {/* Branding */}
+      {/* Branding + Quick Create */}
       <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
         <BananaIcon className="h-5 w-5 sm:h-6 sm:w-6 text-yellow-500" />
         <div className="font-semibold text-sm sm:text-lg truncate">
           <span className="hidden sm:inline">Banananano</span>
           <span className="sm:hidden">Banananano</span>
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="Create new project"
+          className="ml-1 sm:ml-2"
+          onClick={handleCreateUntitled}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
       </div>
 
-      {/* Project Name (when on project page) - Hidden on small screens */}
-      {projectId && projectName && (
-        <div className="hidden sm:flex font-semibold text-muted-foreground truncate">
-          / {projectName}
+      {/* Centered Project Name */}
+      {projectId && projectName ? (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-12">
+          <div className="font-semibold text-sm sm:text-base md:text-lg text-muted-foreground truncate">
+            {projectName}
+          </div>
         </div>
-      )}
+      ) : null}
 
       {/* User Menu */}
       <div className="ml-auto">
