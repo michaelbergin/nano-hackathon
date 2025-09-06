@@ -4,7 +4,16 @@ import type { JSX } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Menu, User, LogOut, Plus, FileText, FolderOpen, Clock } from "lucide-react";
+import {
+  Menu,
+  User,
+  LogOut,
+  Plus,
+  FileText,
+  FolderOpen,
+  Clock,
+  Banana,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -23,7 +32,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { BananaIcon } from "@/components/BananaIcon";
 
 interface HeaderProps {
   projectId?: number;
@@ -52,20 +60,29 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
   }> => {
     try {
       const raw = localStorage.getItem(RECENT_KEY);
-      const list = raw ? (JSON.parse(raw) as Array<{ id: number; name: string; lastOpenedAt: number }>) : [];
+      const list = raw
+        ? (JSON.parse(raw) as Array<{
+            id: number;
+            name: string;
+            lastOpenedAt: number;
+          }>)
+        : [];
       return Array.isArray(list) ? list : [];
     } catch {
       return [];
     }
   }, []);
 
-  const saveRecents = useCallback((list: Array<{ id: number; name: string; lastOpenedAt: number }>): void => {
-    try {
-      localStorage.setItem(RECENT_KEY, JSON.stringify(list));
-    } catch {
-      // ignore write errors
-    }
-  }, []);
+  const saveRecents = useCallback(
+    (list: Array<{ id: number; name: string; lastOpenedAt: number }>): void => {
+      try {
+        localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+      } catch {
+        // ignore write errors
+      }
+    },
+    []
+  );
 
   const handleCreateUntitled = useCallback((): void => {
     router.push("/new");
@@ -97,7 +114,10 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
     const now = Date.now();
     const current = loadRecents();
     const without = current.filter((p) => p.id !== projectId);
-    const updated = [{ id: projectId, name: projectName, lastOpenedAt: now }, ...without]
+    const updated = [
+      { id: projectId, name: projectName, lastOpenedAt: now },
+      ...without,
+    ]
       .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)
       .slice(0, 10);
     saveRecents(updated);
@@ -213,14 +233,20 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
                 </div>
                 {recentProjects.map((p) => (
                   <Link key={p.id} href={`/projects/${p.id}`}>
-                    <Button variant="ghost" className="w-full justify-start truncate" title={p.name}>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start truncate"
+                      title={p.name}
+                    >
                       <span className="truncate">{p.name}</span>
                     </Button>
                   </Link>
                 ))}
               </div>
             ) : (
-              <div className="px-2 text-xs text-muted-foreground">No recent projects</div>
+              <div className="px-2 text-xs text-muted-foreground">
+                No recent projects
+              </div>
             )}
           </nav>
         </SheetContent>
@@ -228,7 +254,7 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
 
       {/* Branding + Quick Create */}
       <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-        <BananaIcon className="h-5 w-5 sm:h-6 sm:w-6 text-yellow-500" />
+        <Banana className="h-5 w-5 sm:h-6 sm:w-6 text-yellow-500" />
         <div className="font-semibold text-sm sm:text-lg truncate">
           <span className="hidden sm:inline">Banananano</span>
           <span className="sm:hidden">Banananano</span>

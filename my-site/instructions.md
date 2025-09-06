@@ -160,6 +160,15 @@ All components are now production-ready with best-in-class UX and developer expe
 - Strokes: Each stroke is a polyline with `{ points: number[], color: string, size: number, erase: boolean }`.
 - State management: A reducer manages actions for adding/removing/selecting layers, toggling visibility, renaming, clearing, and adding strokes to the active layer.
 
+#### Performance Optimizations — NEW
+
+- 30fps scheduler: Canvas redraws are gated by a requestAnimationFrame scheduler targeting 30fps to reduce jank under load.
+- Event throttling: Pointer move and resize paths no longer trigger immediate redraw; they request a scheduled frame.
+- Image caching: Images are preloaded and cached; redraw is requested onload only.
+- Stroke thinning: During pointer move, closely spaced points (< 1px) are dropped to minimize path density without visible loss.
+- Non-mutating UI transforms: Layer list uses `[...layers].reverse()` to avoid mutating state during render.
+- Reorder layers: DnD reorders top→bottom in UI, mapped to bottom→top for reducer/renderer.
+
 #### Drag-and-Drop Layer Reordering — NEW
 
 - UI: Layers card supports drag-and-drop reordering using dnd-kit.
@@ -177,6 +186,16 @@ All components are now production-ready with best-in-class UX and developer expe
 
 - Function: `getCanvasScreenshot(layers, width, height)` composes visible layers into a single PNG data URL, honoring transparency and brush/erase operations.
 - UI: A "Screenshot" button stores the latest composite image in memory and previews it beneath the layer controls. A "Download PNG" button saves the latest composite to disk as `canvas-YYYYMMDD-hhmmss.png`.
+
+#### Device Pixel Ratio (DPR) Fix — NEW
+
+- **Issue**: Screenshots were capturing double the canvas region on iPad/mobile devices due to automatic DPR scaling.
+- **Root Cause**: The `getCanvasScreenshotAsync` function was receiving CSS pixel dimensions but internally scaling by device pixel ratio (DPR=2 on retina displays), resulting in 2x larger output images.
+- **Solution**: Added explicit `dprInput: 1` parameter to all screenshot functions to force consistent 1:1 pixel ratio across all devices:
+  - `captureScreenshot()` - For composite preview
+  - `downloadComposite()` - For PNG download
+  - `onGenerateBanana()` - For AI generation input
+- **Result**: Screenshots now capture the exact canvas region consistently across desktop, tablet, and mobile devices.
 
 ### Image Uploads & Cloudinary
 

@@ -96,6 +96,10 @@ interface CanvasBoardProps {
   onSave?: (data: string) => void;
 }
 
+// Target frame rate for canvas redraws
+const TARGET_FPS = 30;
+const FRAME_TIME = 1000 / TARGET_FPS;
+
 export function CanvasBoard({
   initialData,
   onSave,
@@ -109,6 +113,18 @@ export function CanvasBoard({
     new Map<string, HTMLImageElement>()
   );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // UI-only collapse state for controls panels
+  const [panelsCollapsed, setPanelsCollapsed] = useState<{
+    tools: boolean;
+    actions: boolean;
+    layers: boolean;
+    banana: boolean;
+  }>({ tools: false, actions: false, layers: false, banana: false });
+
+  // Render scheduling (30fps)
+  const lastRenderTimeRef = useRef<number>(0);
+  const renderRequestedRef = useRef<boolean>(false);
 
   const isDrawingRef = useRef<boolean>(false);
   const currentPathRef = useRef<PathStroke | null>(null);
@@ -240,14 +256,13 @@ export function CanvasBoard({
   }, [state.layers, onSave]);
 
   const getCssSize = useCallback((): { cssW: number; cssH: number } => {
-    const ctx = ctxRef.current;
     const canvas = canvasRef.current;
-    if (!ctx || !canvas) return { cssW: 0, cssH: 0 };
-    const m = ctx.getTransform();
-    const scaleX = m.a || 1;
-    const scaleY = m.d || 1;
-    const cssW = canvas.width / scaleX;
-    const cssH = canvas.height / scaleY;
+    if (!canvas) {
+      return { cssW: 0, cssH: 0 };
+    }
+    // Use layout-based size which is stable across devices and browsers
+    const cssW = Math.max(1, Math.floor(canvas.clientWidth));
+    const cssH = Math.max(1, Math.floor(canvas.clientHeight));
     return { cssW, cssH };
   }, []);
 
@@ -270,6 +285,11 @@ export function CanvasBoard({
         }
         const cached = imageCacheRef.current.get(layer.imageSrc) ?? null;
         if (cached) {
+          // Banana images always fill the entire canvas
+          if (layer.banana) {
+            return { x: 0, y: 0, width: cssW, height: cssH };
+          }
+          // Regular images use aspect-fit
           const imageAspectRatio = cached.width / cached.height;
           const canvasAspectRatio = cssW / cssH;
           if (imageAspectRatio > canvasAspectRatio) {
@@ -416,35 +436,70 @@ export function CanvasBoard({
       if (layer.type === "image") {
         const cached = imageCacheRef.current.get(layer.imageSrc) ?? null;
         if (cached) {
-          const imageAspectRatio = cached.width / cached.height;
-          // Use explicit bounds if present; else aspect-fit
-          let { x, y, width, height } = layer;
-          if (
-            typeof x !== "number" ||
-            typeof y !== "number" ||
-            typeof width !== "number" ||
-            typeof height !== "number"
-          ) {
+          // Special handling for banana-generated images - cover entire canvas frame
+          if (layer.banana) {
+            // Calculate "cover" scaling - image fills entire canvas, may crop
+            const imageAspectRatio = cached.width / cached.height;
             const canvasAspectRatio = cssW / cssH;
+
+            let sourceX = 0;
+            let sourceY = 0;
+            let sourceWidth = cached.width;
+            let sourceHeight = cached.height;
+
             if (imageAspectRatio > canvasAspectRatio) {
-              width = cssW;
-              height = cssW / imageAspectRatio;
-              x = 0;
-              y = (cssH - height) / 2;
+              // Image is wider - crop horizontally
+              sourceWidth = cached.height * canvasAspectRatio;
+              sourceX = (cached.width - sourceWidth) / 2;
             } else {
-              height = cssH;
-              width = cssH * imageAspectRatio;
-              x = (cssW - width) / 2;
-              y = 0;
+              // Image is taller - crop vertically
+              sourceHeight = cached.width / canvasAspectRatio;
+              sourceY = (cached.height - sourceHeight) / 2;
             }
+
+            // Draw the cropped portion to fill entire canvas
+            octx.drawImage(
+              cached,
+              sourceX,
+              sourceY,
+              sourceWidth,
+              sourceHeight, // Source rectangle
+              0,
+              0,
+              cssW,
+              cssH // Destination rectangle
+            );
+          } else {
+            const imageAspectRatio = cached.width / cached.height;
+            // Use explicit bounds if present; else aspect-fit
+            let { x, y, width, height } = layer;
+            if (
+              typeof x !== "number" ||
+              typeof y !== "number" ||
+              typeof width !== "number" ||
+              typeof height !== "number"
+            ) {
+              const canvasAspectRatio = cssW / cssH;
+              if (imageAspectRatio > canvasAspectRatio) {
+                width = cssW;
+                height = cssW / imageAspectRatio;
+                x = 0;
+                y = (cssH - height) / 2;
+              } else {
+                height = cssH;
+                width = cssH * imageAspectRatio;
+                x = (cssW - width) / 2;
+                y = 0;
+              }
+            }
+            octx.drawImage(
+              cached,
+              x as number,
+              y as number,
+              width as number,
+              height as number
+            );
           }
-          octx.drawImage(
-            cached,
-            x as number,
-            y as number,
-            width as number,
-            height as number
-          );
         }
       } else {
         const dx = layer.offsetX ?? 0;
@@ -516,6 +571,29 @@ export function CanvasBoard({
     }
   }, [state.layers, state.activeLayerId, state.mode, getLayerBoundingRect]);
 
+  // Request a render using rAF, limited to TARGET_FPS
+  const requestRender = useCallback((): void => {
+    if (renderRequestedRef.current) {
+      return;
+    }
+    renderRequestedRef.current = true;
+    requestAnimationFrame(() => {
+      const now = performance.now();
+      if (now - lastRenderTimeRef.current >= FRAME_TIME) {
+        drawAll();
+        lastRenderTimeRef.current = now;
+      }
+      renderRequestedRef.current = false;
+    });
+  }, [drawAll]);
+
+  // Force immediate render without frame rate limiting
+  const forceRender = useCallback((): void => {
+    drawAll();
+    lastRenderTimeRef.current = performance.now();
+    renderRequestedRef.current = false;
+  }, [drawAll]);
+
   const resizeCanvas = useCallback((): void => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -554,8 +632,8 @@ export function CanvasBoard({
       octx.lineCap = "round";
       offscreenCtxRef.current = octx;
     }
-    drawAll();
-  }, [state.brushSize, state.strokeColor, drawAll]);
+    requestRender();
+  }, [state.brushSize, state.strokeColor, requestRender]);
 
   useEffect(() => {
     resizeCanvas();
@@ -573,14 +651,14 @@ export function CanvasBoard({
       img.crossOrigin = "anonymous";
       img.onload = () => {
         imageCacheRef.current.set(src, img);
-        drawAll();
+        requestRender();
       };
       img.onerror = () => {
         // Do not retry automatically; leave uncached on error
       };
       img.src = src;
     },
-    [drawAll]
+    [requestRender]
   );
 
   const getRelativePoint = useCallback((evt: PointerEvent): Point2 => {
@@ -595,8 +673,8 @@ export function CanvasBoard({
   }, []);
 
   useEffect(() => {
-    drawAll();
-  }, [state.layers, drawAll]);
+    forceRender();
+  }, [state.layers, forceRender]);
 
   // Preload images for visible image layers so they persist during interactions
   useEffect(() => {
@@ -654,12 +732,12 @@ export function CanvasBoard({
           erase: state.mode === "erase",
         };
         currentPathRef.current = start;
-        drawAll();
+        requestRender();
       }
     },
     [
       getRelativePoint,
-      drawAll,
+      requestRender,
       state.strokeColor,
       state.brushSize,
       state.mode,
@@ -696,7 +774,7 @@ export function CanvasBoard({
           dispatch({ type: "MOVE_LAYER", id: drag.id, dx, dy });
           drag.lastX = x;
           drag.lastY = y;
-          drawAll();
+          requestRender();
         }
         return;
       }
@@ -713,20 +791,32 @@ export function CanvasBoard({
 
       // Prefer coalesced events for smoother Apple Pencil input when available
       const coalesced = (evt.getCoalescedEvents?.() ?? []) as PointerEvent[];
+      const prev = curr.points;
+      const pushIfFar = (x: number, y: number): void => {
+        const n = prev.length;
+        const lastX = prev[n - 2];
+        const lastY = prev[n - 1];
+        // Distance threshold ~ 1px to thin very dense input
+        const dx = x - lastX;
+        const dy = y - lastY;
+        if (dx * dx + dy * dy >= 1) {
+          prev.push(x, y);
+        }
+      };
       if (coalesced.length > 0) {
-        let points = curr.points;
         for (const pe of coalesced) {
           const [cx, cy] = getRelativePoint(pe);
-          points = [...points, cx, cy];
+          pushIfFar(cx, cy);
         }
-        currentPathRef.current = { ...curr, points };
+        currentPathRef.current = { ...curr, points: prev };
       } else {
         const [x, y] = getRelativePoint(evt);
-        currentPathRef.current = { ...curr, points: [...curr.points, x, y] };
+        pushIfFar(x, y);
+        currentPathRef.current = { ...curr, points: prev };
       }
-      drawAll();
+      requestRender();
     },
-    [getRelativePoint, drawAll, state.mode]
+    [getRelativePoint, requestRender, state.mode]
   );
 
   const onPointerUp = useCallback(
@@ -765,9 +855,11 @@ export function CanvasBoard({
           type: "ADD_STROKE_TO_ACTIVE",
           stroke: { ...finished, points: [...toStore] },
         });
+        // Force immediate render of the completed stroke
+        forceRender();
       }
     },
-    [state.mode, state.activeLayerId, state.layers]
+    [state.mode, state.activeLayerId, state.layers, forceRender]
   );
 
   useEffect(() => {
@@ -814,7 +906,7 @@ export function CanvasBoard({
       else return;
       e.preventDefault();
       dispatch({ type: "MOVE_LAYER", id: active.id, dx, dy });
-      drawAll();
+      requestRender();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
@@ -833,7 +925,7 @@ export function CanvasBoard({
     state.mode,
     state.layers,
     state.activeLayerId,
-    drawAll,
+    requestRender,
   ]);
 
   // UI state for controls
@@ -844,44 +936,44 @@ export function CanvasBoard({
   const onClearActive = useCallback((): void => {
     dispatch({ type: "CLEAR_ACTIVE_LAYER" });
     currentPathRef.current = null;
-    drawAll();
-  }, [drawAll]);
+    requestRender();
+  }, [requestRender]);
 
   const onClearAll = useCallback((): void => {
     dispatch({ type: "CLEAR_ALL_LAYERS" });
     currentPathRef.current = null;
-    drawAll();
-  }, [drawAll]);
+    requestRender();
+  }, [requestRender]);
 
   const captureScreenshot = useCallback((): void => {
-    const container = containerRef.current;
-    if (!container) {
+    const { cssW, cssH } = getCssSize();
+    if (cssW <= 0 || cssH <= 0) {
       dispatch({ type: "SET_COMPOSITE", dataUrl: null });
       return;
     }
-    const rect = container.getBoundingClientRect();
     const visibleLayers = state.layers.filter((l) => l.visible);
     (async () => {
       const dataUrl = await getCanvasScreenshotAsync(
         visibleLayers,
-        Math.max(1, Math.floor(rect.width)),
-        Math.max(1, Math.floor(rect.height))
+        Math.max(1, Math.floor(cssW)),
+        Math.max(1, Math.floor(cssH)),
+        1 // Force DPR=1 for consistent screenshot size across devices
       );
       dispatch({ type: "SET_COMPOSITE", dataUrl });
     })();
-  }, [state.layers]);
+  }, [state.layers, getCssSize]);
 
   const downloadComposite = useCallback(async (): Promise<void> => {
-    const container = containerRef.current;
-    if (!container) {
+    const { cssW, cssH } = getCssSize();
+    if (cssW <= 0 || cssH <= 0) {
       return;
     }
-    const rect = container.getBoundingClientRect();
     const visibleLayers = state.layers.filter((l) => l.visible);
     const dataUrl = await getCanvasScreenshotAsync(
       visibleLayers,
-      Math.max(1, Math.floor(rect.width)),
-      Math.max(1, Math.floor(rect.height))
+      Math.max(1, Math.floor(cssW)),
+      Math.max(1, Math.floor(cssH)),
+      1 // Force DPR=1 for consistent screenshot size across devices
     );
     if (!dataUrl) {
       return;
@@ -897,7 +989,7 @@ export function CanvasBoard({
     a.href = dataUrl;
     a.download = `canvas-${yyyy}${mm}${dd}-${hh}${nn}${ss}.png`;
     a.click();
-  }, [state.layers]);
+  }, [state.layers, getCssSize]);
 
   const uploadToCloudinary = useCallback(
     async (file: File): Promise<string | null> => {
@@ -1005,18 +1097,18 @@ export function CanvasBoard({
     if (isGenerating) {
       return;
     }
-    const container = containerRef.current;
-    if (!container) {
+    const { cssW, cssH } = getCssSize();
+    if (cssW <= 0 || cssH <= 0) {
       return;
     }
     setIsGenerating(true);
     try {
-      const rect = container.getBoundingClientRect();
       const visibleLayers = state.layers.filter((l) => l.visible);
       const composite = await getCanvasScreenshotAsync(
         visibleLayers,
-        Math.max(1, Math.floor(rect.width)),
-        Math.max(1, Math.floor(rect.height))
+        Math.max(1, Math.floor(cssW)),
+        Math.max(1, Math.floor(cssH)),
+        1 // Force DPR=1 for consistent screenshot size across devices
       );
       const res = await fetch("/api/nano-banana", {
         method: "POST",
@@ -1037,7 +1129,7 @@ export function CanvasBoard({
     } finally {
       setIsGenerating(false);
     }
-  }, [isGenerating, state.layers, bananaPrompt]);
+  }, [isGenerating, state.layers, bananaPrompt, getCssSize]);
 
   // Create controls state and actions
   const controlsState = {
@@ -1049,6 +1141,7 @@ export function CanvasBoard({
     compositeDataUrl: state.compositeDataUrl,
     isGenerating,
     bananaPrompt,
+    panelsCollapsed,
   };
 
   const controlsActions = {
@@ -1061,7 +1154,7 @@ export function CanvasBoard({
       // internal reducer expects bottom->top order
       const bottomToTop = [...orderTopToBottom].reverse();
       dispatch({ type: "REORDER_LAYERS", order: bottomToTop });
-      drawAll();
+      requestRender();
     },
     setMode: (mode: BoardMode) => dispatch({ type: "SET_MODE", mode }),
     setColor: (color: string) => dispatch({ type: "SET_COLOR", color }),
@@ -1073,6 +1166,9 @@ export function CanvasBoard({
     openUpload: onOpenUpload,
     generateBanana: onGenerateBanana,
     setBananaPrompt,
+    togglePanelCollapsed: (panel: keyof typeof panelsCollapsed) => {
+      setPanelsCollapsed((prev) => ({ ...prev, [panel]: !prev[panel] }));
+    },
   };
 
   return (

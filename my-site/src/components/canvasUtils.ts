@@ -138,7 +138,13 @@ export function getCanvasScreenshot(
             y = 0;
           }
         }
-        layerCtx.drawImage(img, x as number, y as number, w as number, h as number);
+        layerCtx.drawImage(
+          img,
+          x as number,
+          y as number,
+          w as number,
+          h as number
+        );
       }
     } else {
       const dx = layer.offsetX ?? 0;
@@ -226,7 +232,13 @@ export async function getCanvasScreenshotAsync(
           y = 0;
         }
       }
-      layerCtx.drawImage(img, x as number, y as number, w as number, h as number);
+      layerCtx.drawImage(
+        img,
+        x as number,
+        y as number,
+        w as number,
+        h as number
+      );
     } else {
       const dx = layer.offsetX ?? 0;
       const dy = layer.offsetY ?? 0;
@@ -323,7 +335,13 @@ export function boardReducer(
         ...state,
         layers: state.layers.map((l) =>
           l.id === action.id && l.type === "image"
-            ? { ...l, x: action.x, y: action.y, width: action.width, height: action.height }
+            ? {
+                ...l,
+                x: action.x,
+                y: action.y,
+                width: action.width,
+                height: action.height,
+              }
             : l
         ),
       };
