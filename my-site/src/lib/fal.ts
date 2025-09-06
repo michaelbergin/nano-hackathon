@@ -1,4 +1,5 @@
 import { fal } from "@fal-ai/client";
+import type { JSX } from "react";
 
 type ImageUrl = string;
 
@@ -46,14 +47,15 @@ export async function runNanoBananaEdit({
     input,
   });
 
+  const anyResult = result as Record<string, unknown>;
   const url =
-    result?.images?.[0]?.url ||
-    result?.image?.url ||
-    result?.data?.images?.[0]?.url ||
-    result?.data?.image?.url ||
-    result?.output?.[0]?.url ||
-    result?.output?.image?.url ||
-    result?.url;
+    (anyResult?.images as Array<{ url?: unknown }> | undefined)?.[0]?.url ||
+    (anyResult?.image as { url?: unknown } | undefined)?.url ||
+    ((anyResult?.data as { images?: Array<{ url?: unknown }>; image?: { url?: unknown } } | undefined)?.images?.[0]?.url) ||
+    ((anyResult?.data as { images?: Array<{ url?: unknown }>; image?: { url?: unknown } } | undefined)?.image?.url) ||
+    (anyResult?.output as Array<{ url?: unknown }> | undefined)?.[0]?.url ||
+    (anyResult?.output as { image?: { url?: unknown } } | undefined)?.image?.url ||
+    (anyResult?.url as unknown);
 
   if (!url || typeof url !== "string") {
     throw new Error("nano-banana/edit did not return an image URL");

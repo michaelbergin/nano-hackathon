@@ -1,79 +1,86 @@
 "use client";
 
 import type { JSX, ReactNode } from "react";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
+import { Menu, LogOut, Plus, FileText, FolderOpen } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 export function AppShell({ children }: { children: ReactNode }): JSX.Element {
   const [open, setOpen] = useState<boolean>(false);
-  const panelRef = useRef<HTMLDivElement | null>(null);
 
   const onToggle = useCallback((): void => {
     setOpen((v) => !v);
   }, []);
 
-  useEffect(() => {
-    function onDocClick(e: MouseEvent): void {
-      if (!open) {
-        return;
-      }
-      const target = e.target as Node | null;
-      if (panelRef.current && target && !panelRef.current.contains(target)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [open]);
+  const onOpenChange = useCallback((open: boolean): void => {
+    setOpen(open);
+  }, []);
 
   return (
     <div className="min-h-dvh grid grid-rows-[56px_1fr] grid-cols-1">
-      <header className="h-14 border-b flex items-center gap-3 px-4 bg-white relative z-30">
-        <button
-          onClick={onToggle}
-          className="rounded border px-3 h-8 text-sm bg-white hover:bg-gray-50"
-          aria-pressed={open}
-          aria-label="Toggle navigation"
-        >
-          Menu
-        </button>
+      <header className="h-14 border-b flex items-center gap-3 px-4 bg-background relative z-30">
+        <Sheet open={open} onOpenChange={onOpenChange}>
+          <SheetTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onToggle}
+              aria-label="Toggle navigation"
+            >
+              <Menu className="h-4 w-4" />
+              Menu
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-64">
+            <SheetHeader>
+              <SheetTitle>Navigation</SheetTitle>
+              <SheetDescription>
+                Access your projects and tools
+              </SheetDescription>
+            </SheetHeader>
+            <nav className="space-y-2 mt-6">
+              <Link href="/new" onClick={() => setOpen(false)}>
+                <Button variant="ghost" className="w-full justify-start">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Project
+                </Button>
+              </Link>
+              <Link href="/create" onClick={() => setOpen(false)}>
+                <Button variant="ghost" className="w-full justify-start">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Create
+                </Button>
+              </Link>
+              <Link href="/projects" onClick={() => setOpen(false)}>
+                <Button variant="ghost" className="w-full justify-start">
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  Projects
+                </Button>
+              </Link>
+            </nav>
+          </SheetContent>
+        </Sheet>
+
         <div className="font-semibold">Banananano</div>
         <div className="ml-auto flex items-center gap-2">
           <form action="/api/logout" method="post">
-            <button className="rounded border px-3 h-8 text-sm bg-white hover:bg-gray-50">
+            <Button variant="outline" size="sm" type="submit">
+              <LogOut className="h-4 w-4 mr-2" />
               Logout
-            </button>
+            </Button>
           </form>
         </div>
       </header>
       <div className="relative h-full">
-        {open && (
-          <aside
-            ref={panelRef}
-            className="fixed top-14 left-0 bottom-0 w-64 border-r bg-white p-3 shadow-xl z-20"
-          >
-            <nav className="space-y-2">
-              <Link
-                href="/new"
-                className="block rounded px-2 py-1 hover:bg-gray-50"
-              >
-                New Project
-              </Link>
-              <Link
-                href="/create"
-                className="block rounded px-2 py-1 hover:bg-gray-50"
-              >
-                Create
-              </Link>
-              <Link
-                href="/projects"
-                className="block rounded px-2 py-1 hover:bg-gray-50"
-              >
-                Projects
-              </Link>
-            </nav>
-          </aside>
-        )}
         <main className="h-full overflow-hidden">{children}</main>
       </div>
     </div>

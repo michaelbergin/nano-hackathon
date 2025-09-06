@@ -1,3 +1,5 @@
+import type { JSX } from "react";
+import type { JSX } from "react";
 import { AppShell } from "@/components/AppShell";
 import { prisma } from "@/lib/prisma";
 

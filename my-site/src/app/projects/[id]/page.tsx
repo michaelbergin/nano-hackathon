@@ -1,19 +1,22 @@
+import type { JSX } from "react";
 import { prisma } from "@/lib/prisma";
 import { verifyAuthToken } from "@/lib/auth";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import type { JSX } from "react";
 import { ProjectCanvas } from "./ProjectCanvas";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Calendar } from "lucide-react";
 
 interface ProjectPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function ProjectPage({
   params,
 }: ProjectPageProps): Promise<JSX.Element> {
-  const { id } = params;
+  const { id } = await params;
   const projectId = parseInt(id, 10);
 
   if (isNaN(projectId)) {
@@ -43,16 +46,25 @@ export default async function ProjectPage({
 
   return (
     <AppShell>
-      <div className="w-full h-full grid grid-rows-[auto_1fr] gap-3 overflow-hidden">
-        <div className="px-3 flex items-center justify-between">
-          <h1 className="text-xl font-semibold">{project.name}</h1>
-          <div className="text-sm text-gray-500">
-            Created {project.createdAt.toLocaleDateString()}
-          </div>
-        </div>
-        <div className="min-h-0 h-full">
-          <ProjectCanvas projectId={project.id} initialData={project.data} />
-        </div>
+      <div className="w-full h-full grid grid-rows-[auto_1fr] gap-4 overflow-hidden p-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold tracking-tight">
+                {project.name}
+              </h1>
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                {project.createdAt.toLocaleDateString()}
+              </Badge>
+            </div>
+          </CardHeader>
+        </Card>
+        <Card className="min-h-0 h-full">
+          <CardContent className="p-0 h-full">
+            <ProjectCanvas projectId={project.id} initialData={project.data} />
+          </CardContent>
+        </Card>
       </div>
     </AppShell>
   );

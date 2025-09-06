@@ -62,6 +62,9 @@
 
 - Canvas component: `src/components/CanvasBoard.tsx`
 - Features: freehand draw with mouse, overlay controls (Draw/Erase, color picker, brush size, Clear), HiDPI-aware resize.
+- Layers: reducer-managed layers with active selection, visibility toggling, add/remove, per-layer clearing.
+- Persistence: JSON format `{ layers: Layer[] }`, with legacy single-layer import supported.
+- Screenshot: `getCanvasScreenshot` composes visible layers to a PNG data URL; latest capture is previewed in UI.
 - Layout: canvas is truly full-screen within the content area. Controls are an overlay panel positioned at top-left; there is no left rail.
 - Shell: `src/components/AppShell.tsx` sets `main` to `h-full` so children can fill viewport height beneath the header.
 - Project page: `src/app/projects/[id]/page.tsx` uses a two-row grid (header + `1fr`) so `ProjectCanvas` occupies all remaining space.

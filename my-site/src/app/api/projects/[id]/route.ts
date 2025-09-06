@@ -4,7 +4,7 @@ import { verifyAuthToken } from "@/lib/auth";
 import { cookies } from "next/headers";
 
 interface RouteParams {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export async function PATCH(
@@ -12,7 +12,7 @@ export async function PATCH(
   { params }: RouteParams
 ): Promise<Response> {
   try {
-    const { id } = params;
+    const { id } = await params;
     const projectId = parseInt(id, 10);
 
     if (isNaN(projectId)) {

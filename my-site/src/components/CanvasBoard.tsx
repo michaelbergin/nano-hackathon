@@ -1,7 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import type { JSX, ChangeEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 
 type Point2 = [number, number];
 type PolyLine2 = number[];
@@ -12,9 +19,217 @@ type PathStroke = {
   erase: boolean;
 };
 
+type Layer = {
+  id: string;
+  name: string;
+  visible: boolean;
+  strokes: PathStroke[];
+};
+
+type BoardMode = "draw" | "erase";
+
+type BoardState = {
+  layers: Layer[];
+  activeLayerId: string;
+  mode: BoardMode;
+  strokeColor: string;
+  brushSize: number;
+  compositeDataUrl: string | null;
+};
+
+type BoardAction =
+  | { type: "ADD_LAYER"; name?: string }
+  | { type: "REMOVE_LAYER"; id: string }
+  | { type: "SELECT_LAYER"; id: string }
+  | { type: "TOGGLE_LAYER_VISIBILITY"; id: string }
+  | { type: "RENAME_LAYER"; id: string; name: string }
+  | { type: "ADD_STROKE_TO_ACTIVE"; stroke: PathStroke }
+  | { type: "CLEAR_ACTIVE_LAYER" }
+  | { type: "CLEAR_ALL_LAYERS" }
+  | { type: "SET_MODE"; mode: BoardMode }
+  | { type: "SET_COLOR"; color: string }
+  | { type: "SET_BRUSH_SIZE"; size: number }
+  | { type: "LOAD_FROM_DATA"; layers: Layer[] }
+  | { type: "SET_COMPOSITE"; dataUrl: string | null };
+
 interface CanvasBoardProps {
   initialData?: string;
   onSave?: (data: string) => void;
+}
+
+function generateLayerId(): string {
+  return `layer-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
+}
+
+function createLayer(name: string): Layer {
+  return {
+    id: generateLayerId(),
+    name,
+    visible: true,
+    strokes: [],
+  };
+}
+
+function ensureActiveLayerId(layers: Layer[], currentId: string): string {
+  const has = layers.some((l) => l.id === currentId);
+  if (has && layers.length > 0) {
+    return currentId;
+  }
+  return layers.length > 0 ? layers[0].id : generateLayerId();
+}
+
+function boardReducer(state: BoardState, action: BoardAction): BoardState {
+  switch (action.type) {
+    case "ADD_LAYER": {
+      const name = action.name ?? `Layer ${state.layers.length + 1}`;
+      const nextLayer = createLayer(name);
+      return {
+        ...state,
+        layers: [...state.layers, nextLayer],
+        activeLayerId: nextLayer.id,
+      };
+    }
+    case "REMOVE_LAYER": {
+      const remaining = state.layers.filter((l) => l.id !== action.id);
+      const nextActive = ensureActiveLayerId(remaining, state.activeLayerId);
+      return {
+        ...state,
+        layers: remaining.length > 0 ? remaining : [createLayer("Layer 1")],
+        activeLayerId:
+          remaining.length > 0
+            ? nextActive
+            : remaining[0]?.id ?? state.activeLayerId,
+      };
+    }
+    case "SELECT_LAYER": {
+      return { ...state, activeLayerId: action.id };
+    }
+    case "TOGGLE_LAYER_VISIBILITY": {
+      return {
+        ...state,
+        layers: state.layers.map((l) =>
+          l.id === action.id ? { ...l, visible: !l.visible } : l
+        ),
+      };
+    }
+    case "RENAME_LAYER": {
+      return {
+        ...state,
+        layers: state.layers.map((l) =>
+          l.id === action.id ? { ...l, name: action.name } : l
+        ),
+      };
+    }
+    case "ADD_STROKE_TO_ACTIVE": {
+      const idx = state.layers.findIndex((l) => l.id === state.activeLayerId);
+      if (idx === -1) {
+        return state;
+      }
+      const target = state.layers[idx];
+      const updated: Layer = {
+        ...target,
+        strokes: [...target.strokes, action.stroke],
+      };
+      const nextLayers = state.layers.slice();
+      nextLayers[idx] = updated;
+      return { ...state, layers: nextLayers };
+    }
+    case "CLEAR_ACTIVE_LAYER": {
+      const nextLayers = state.layers.map((l) =>
+        l.id === state.activeLayerId ? { ...l, strokes: [] } : l
+      );
+      return { ...state, layers: nextLayers };
+    }
+    case "CLEAR_ALL_LAYERS": {
+      return {
+        ...state,
+        layers: state.layers.map((l) => ({ ...l, strokes: [] })),
+      };
+    }
+    case "SET_MODE": {
+      return { ...state, mode: action.mode };
+    }
+    case "SET_COLOR": {
+      return { ...state, strokeColor: action.color };
+    }
+    case "SET_BRUSH_SIZE": {
+      return { ...state, brushSize: action.size };
+    }
+    case "LOAD_FROM_DATA": {
+      const layers =
+        action.layers.length > 0 ? action.layers : [createLayer("Layer 1")];
+      return {
+        ...state,
+        layers,
+        activeLayerId: layers[0].id,
+      };
+    }
+    case "SET_COMPOSITE": {
+      return { ...state, compositeDataUrl: action.dataUrl };
+    }
+    default: {
+      return state;
+    }
+  }
+}
+
+function drawPathOnContext(
+  ctx: CanvasRenderingContext2D,
+  stroke: PathStroke
+): void {
+  const polyline = stroke.points;
+  if (polyline.length < 4) {
+    return;
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = stroke.erase
+    ? "destination-out"
+    : "source-over";
+  ctx.lineWidth = stroke.size;
+  ctx.strokeStyle = stroke.color;
+  ctx.beginPath();
+  ctx.moveTo(polyline[0], polyline[1]);
+  for (let i = 2; i < polyline.length; i += 2) {
+    ctx.lineTo(polyline[i], polyline[i + 1]);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+export function getCanvasScreenshot(
+  layers: Layer[],
+  width: number,
+  height: number,
+  dprInput?: number
+): string {
+  const dpr = Math.max(
+    1,
+    Math.floor(
+      dprInput ??
+        (typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1)
+    )
+  );
+  const off = document.createElement("canvas");
+  off.width = Math.max(1, Math.floor(width * dpr));
+  off.height = Math.max(1, Math.floor(height * dpr));
+  const ctx = off.getContext("2d");
+  if (!ctx) {
+    return "";
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  for (const layer of layers) {
+    if (!layer.visible) {
+      continue;
+    }
+    for (const stroke of layer.strokes) {
+      drawPathOnContext(ctx, stroke);
+    }
+  }
+  return off.toDataURL("image/png");
 }
 
 export function CanvasBoard({
@@ -25,54 +240,89 @@ export function CanvasBoard({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
 
-  const [paths, setPaths] = useState<PathStroke[]>([]);
   const isDrawingRef = useRef<boolean>(false);
   const currentPathRef = useRef<PathStroke | null>(null);
-  const [mode, setMode] = useState<"draw" | "erase">("draw");
-  const [strokeColor, setStrokeColor] = useState<string>("#111827");
-  const [brushSize, setBrushSize] = useState<number>(4);
 
-  // Load initial data
+  const [state, dispatch] = useReducer(boardReducer, {
+    layers: [createLayer("Layer 1")],
+    activeLayerId: "",
+    mode: "draw",
+    strokeColor: "#111827",
+    brushSize: 4,
+    compositeDataUrl: null,
+  });
+
+  // Ensure activeLayerId is set to first layer on mount
   useEffect(() => {
-    if (initialData) {
-      try {
-        const parsedData = JSON.parse(initialData);
-        if (Array.isArray(parsedData)) {
-          setPaths(parsedData);
+    if (!state.activeLayerId && state.layers.length > 0) {
+      dispatch({ type: "SELECT_LAYER", id: state.layers[0].id });
+    }
+  }, [state.activeLayerId, state.layers]);
+
+  // Load initial data (supports legacy flat strokes array or layered schema)
+  useEffect(() => {
+    if (!initialData) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(initialData) as unknown;
+      if (Array.isArray(parsed)) {
+        // Legacy: flat strokes -> single layer
+        const layer = createLayer("Layer 1");
+        layer.strokes = parsed as PathStroke[];
+        dispatch({ type: "LOAD_FROM_DATA", layers: [layer] });
+      } else if (
+        parsed &&
+        typeof parsed === "object" &&
+        "layers" in (parsed as Record<string, unknown>)
+      ) {
+        const maybe = (parsed as { layers: unknown }).layers;
+        if (Array.isArray(maybe)) {
+          const layers: Layer[] = maybe
+            .map((l) => {
+              const obj = l as Partial<Layer>;
+              if (!obj || typeof obj !== "object") {
+                return null;
+              }
+              const id =
+                typeof obj.id === "string" ? obj.id : generateLayerId();
+              const name = typeof obj.name === "string" ? obj.name : "Layer";
+              const visible =
+                typeof obj.visible === "boolean" ? obj.visible : true;
+              const strokes = Array.isArray(obj.strokes)
+                ? (obj.strokes as PathStroke[])
+                : [];
+              return { id, name, visible, strokes } as Layer;
+            })
+            .filter((x): x is Layer => x !== null);
+          dispatch({ type: "LOAD_FROM_DATA", layers });
         }
-      } catch (err) {
-        console.error("Failed to parse initial canvas data:", err);
       }
+    } catch (err) {
+      console.error("Failed to parse initial canvas data:", err);
     }
   }, [initialData]);
 
-  // Save data when paths change
+  // Save data when layers change
   useEffect(() => {
-    if (onSave && paths.length > 0) {
-      const data = JSON.stringify(paths);
-      onSave(data);
+    if (!onSave) {
+      return;
     }
-  }, [paths, onSave]);
+    const payload = { layers: state.layers };
+    try {
+      const data = JSON.stringify(payload);
+      onSave(data);
+    } catch (_e) {
+      // ignore
+    }
+  }, [state.layers, onSave]);
 
   const drawPath = useCallback((stroke: PathStroke): void => {
     const ctx = ctxRef.current;
-    const polyline = stroke.points;
-    if (!ctx || polyline.length < 4) {
+    if (!ctx) {
       return;
     }
-    ctx.save();
-    ctx.globalCompositeOperation = stroke.erase
-      ? "destination-out"
-      : "source-over";
-    ctx.lineWidth = stroke.size;
-    ctx.strokeStyle = stroke.color;
-    ctx.beginPath();
-    ctx.moveTo(polyline[0], polyline[1]);
-    for (let i = 2; i < polyline.length; i += 2) {
-      ctx.lineTo(polyline[i], polyline[i + 1]);
-    }
-    ctx.stroke();
-    ctx.restore();
+    drawPathOnContext(ctx, stroke);
   }, []);
 
   const drawAll = useCallback((): void => {
@@ -82,14 +332,19 @@ export function CanvasBoard({
       return;
     }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (const s of paths) {
-      drawPath(s);
+    for (const layer of state.layers) {
+      if (!layer.visible) {
+        continue;
+      }
+      for (const s of layer.strokes) {
+        drawPath(s);
+      }
     }
     const current = currentPathRef.current;
     if (current) {
       drawPath(current);
     }
-  }, [paths, drawPath]);
+  }, [state.layers, drawPath]);
 
   const resizeCanvas = useCallback((): void => {
     const canvas = canvasRef.current;
@@ -110,11 +365,11 @@ export function CanvasBoard({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    ctx.lineWidth = brushSize;
-    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = state.brushSize;
+    ctx.strokeStyle = state.strokeColor;
     ctxRef.current = ctx;
     drawAll();
-  }, [brushSize, strokeColor, drawAll]);
+  }, [state.brushSize, state.strokeColor, drawAll]);
 
   useEffect(() => {
     resizeCanvas();
@@ -135,7 +390,7 @@ export function CanvasBoard({
 
   useEffect(() => {
     drawAll();
-  }, [paths, drawAll]);
+  }, [state.layers, drawAll]);
 
   const onPointerDown = useCallback(
     (evt: PointerEvent): void => {
@@ -147,14 +402,14 @@ export function CanvasBoard({
       const [x, y] = getRelativePoint(evt);
       const start: PathStroke = {
         points: [x, y, x, y],
-        color: strokeColor,
-        size: brushSize,
-        erase: mode === "erase",
+        color: state.strokeColor,
+        size: state.brushSize,
+        erase: state.mode === "erase",
       };
       currentPathRef.current = start;
       drawAll();
     },
-    [getRelativePoint, drawAll, strokeColor, brushSize, mode]
+    [getRelativePoint, drawAll, state.strokeColor, state.brushSize, state.mode]
   );
 
   const onPointerMove = useCallback(
@@ -185,10 +440,10 @@ export function CanvasBoard({
     const finished = currentPathRef.current;
     currentPathRef.current = null;
     if (finished && finished.points.length >= 4) {
-      setPaths((prev) => [
-        ...prev,
-        { ...finished, points: [...finished.points] },
-      ]);
+      dispatch({
+        type: "ADD_STROKE_TO_ACTIVE",
+        stroke: { ...finished, points: [...finished.points] },
+      });
     }
   }, []);
 
@@ -210,15 +465,21 @@ export function CanvasBoard({
     };
   }, [onPointerDown, onPointerMove, onPointerUp]);
 
-  const onClear = useCallback((): void => {
-    setPaths([]);
+  const onClearActive = useCallback((): void => {
+    dispatch({ type: "CLEAR_ACTIVE_LAYER" });
+    currentPathRef.current = null;
+    drawAll();
+  }, [drawAll]);
+
+  const onClearAll = useCallback((): void => {
+    dispatch({ type: "CLEAR_ALL_LAYERS" });
     currentPathRef.current = null;
     drawAll();
   }, [drawAll]);
 
   const onColorChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>): void => {
-      setStrokeColor(e.target.value);
+      dispatch({ type: "SET_COLOR", color: e.target.value });
     },
     []
   );
@@ -226,13 +487,57 @@ export function CanvasBoard({
   const onSizeChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>): void => {
       const next = Number(e.target.value);
-      setBrushSize(Number.isFinite(next) ? Math.max(1, Math.min(24, next)) : 4);
+      const clamped = Number.isFinite(next)
+        ? Math.max(1, Math.min(24, next))
+        : 4;
+      dispatch({ type: "SET_BRUSH_SIZE", size: clamped });
       resizeCanvas();
     },
     [resizeCanvas]
   );
 
-  const drawActive = mode === "draw";
+  const onAddLayer = useCallback((): void => {
+    dispatch({ type: "ADD_LAYER" });
+  }, []);
+
+  const onRemoveLayer = useCallback((id: string): void => {
+    dispatch({ type: "REMOVE_LAYER", id });
+  }, []);
+
+  const onSelectLayer = useCallback((id: string): void => {
+    dispatch({ type: "SELECT_LAYER", id });
+  }, []);
+
+  const onToggleLayer = useCallback((id: string): void => {
+    dispatch({ type: "TOGGLE_LAYER_VISIBILITY", id });
+  }, []);
+
+  const onSetModeDraw = useCallback((): void => {
+    dispatch({ type: "SET_MODE", mode: "draw" });
+  }, []);
+
+  const onSetModeErase = useCallback((): void => {
+    dispatch({ type: "SET_MODE", mode: "erase" });
+  }, []);
+
+  const captureScreenshot = useCallback((): void => {
+    const container = containerRef.current;
+    if (!container) {
+      dispatch({ type: "SET_COMPOSITE", dataUrl: null });
+      return;
+    }
+    const rect = container.getBoundingClientRect();
+    const visibleLayers = state.layers.filter((l) => l.visible);
+    const dataUrl = getCanvasScreenshot(
+      visibleLayers,
+      Math.max(1, Math.floor(rect.width)),
+      Math.max(1, Math.floor(rect.height))
+    );
+    dispatch({ type: "SET_COMPOSITE", dataUrl });
+  }, [state.layers]);
+
+  const drawActive = state.mode === "draw";
+  const activeLayerId = state.activeLayerId;
 
   return (
     <div className="relative w-full h-full overflow-hidden">
@@ -244,11 +549,11 @@ export function CanvasBoard({
       </div>
 
       <div className="pointer-events-none absolute top-3 left-3 z-10">
-        <div className="pointer-events-auto border rounded bg-white p-3 space-y-3 shadow">
+        <div className="pointer-events-auto border rounded bg-white p-3 space-y-3 shadow w-[320px]">
           <div className="text-sm font-medium">Canvas</div>
           <div className="flex items-center gap-2">
             <button
-              onClick={(): void => setMode("draw")}
+              onClick={onSetModeDraw}
               aria-pressed={drawActive}
               className={`rounded border px-3 py-1 text-sm ${
                 drawActive
@@ -259,7 +564,7 @@ export function CanvasBoard({
               Draw
             </button>
             <button
-              onClick={(): void => setMode("erase")}
+              onClick={onSetModeErase}
               aria-pressed={!drawActive}
               className={`rounded border px-3 py-1 text-sm ${
                 !drawActive
@@ -274,7 +579,7 @@ export function CanvasBoard({
             <label className="text-sm text-gray-700">Color</label>
             <input
               type="color"
-              value={strokeColor}
+              value={state.strokeColor}
               onChange={onColorChange}
               className="h-8 w-10 p-0 border rounded"
             />
@@ -285,21 +590,92 @@ export function CanvasBoard({
               type="range"
               min={1}
               max={24}
-              value={brushSize}
+              value={state.brushSize}
               onChange={onSizeChange}
             />
             <span className="text-xs text-gray-500 w-6 text-right">
-              {brushSize}
+              {state.brushSize}
             </span>
           </div>
-          <div>
+          <div className="flex items-center gap-2">
             <button
-              onClick={onClear}
+              onClick={onClearActive}
               className="rounded border bg-white px-3 py-1 text-sm hover:bg-gray-50"
             >
-              Clear
+              Clear Active
+            </button>
+            <button
+              onClick={onClearAll}
+              className="rounded border bg-white px-3 py-1 text-sm hover:bg-gray-50"
+            >
+              Clear All
+            </button>
+            <button
+              onClick={captureScreenshot}
+              className="rounded border bg-white px-3 py-1 text-sm hover:bg-gray-50"
+            >
+              Screenshot
             </button>
           </div>
+          <div className="border-t pt-2">
+            <div className="text-sm font-medium mb-1">Layers</div>
+            <div className="max-h-40 overflow-auto space-y-1">
+              {state.layers.map((layer) => {
+                const isActive = layer.id === activeLayerId;
+                return (
+                  <div
+                    key={layer.id}
+                    className={`flex items-center justify-between gap-2 rounded px-2 py-1 ${
+                      isActive ? "bg-gray-100" : ""
+                    }`}
+                  >
+                    <button
+                      onClick={(): void => onSelectLayer(layer.id)}
+                      className="flex-1 text-left text-sm truncate"
+                      title={layer.name}
+                    >
+                      {isActive ? "●" : "○"} {layer.name}
+                    </button>
+                    <button
+                      onClick={(): void => onToggleLayer(layer.id)}
+                      className="rounded border bg-white px-2 py-0.5 text-xs hover:bg-gray-50"
+                      title={layer.visible ? "Hide" : "Show"}
+                    >
+                      {layer.visible ? "Hide" : "Show"}
+                    </button>
+                    <button
+                      onClick={(): void => onRemoveLayer(layer.id)}
+                      className="rounded border bg-white px-2 py-0.5 text-xs hover:bg-gray-50"
+                      disabled={state.layers.length <= 1}
+                      title="Delete layer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-2">
+              <button
+                onClick={onAddLayer}
+                className="rounded border bg-white px-3 py-1 text-sm hover:bg-gray-50 w-full"
+              >
+                + Add Layer
+              </button>
+            </div>
+          </div>
+          {state.compositeDataUrl ? (
+            <div className="border-t pt-2">
+              <div className="text-sm text-gray-700 mb-1">
+                Latest Screenshot
+              </div>
+              <img
+                src={state.compositeDataUrl}
+                alt="Canvas screenshot"
+                className="block w-full h-auto border"
+              />
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
