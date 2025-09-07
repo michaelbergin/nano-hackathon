@@ -1,4 +1,5 @@
 import { fal } from "@fal-ai/client";
+import { generateSystemPrompt } from "./generateSystemPrompt";
 
 type ImageUrl = string;
 
@@ -29,8 +30,11 @@ export async function runNanoBananaEdit({
 }: NanoBananaEditInput): Promise<NanoBananaEditResult> {
   configureFal();
 
+  // Generate complete prompt with system prompt prepended
+  const completePrompt = generateSystemPrompt(prompt);
+
   const input: Record<string, unknown> = {
-    prompt,
+    prompt: completePrompt,
     image_urls: images,
     num_images: 1,
     output_format: "png",
@@ -41,11 +45,11 @@ export async function runNanoBananaEdit({
     logs: false,
   });
 
-  const data = result?.data as unknown as {
+  const data = result.data as unknown as {
     images?: Array<{ url?: string }>;
     image?: { url?: string };
   };
-  const url = data?.images?.[0]?.url || data?.image?.url;
+  const url = data.images?.[0]?.url ?? data.image?.url;
   if (!url || typeof url !== "string") {
     throw new Error("nano-banana/edit did not return an image URL");
   }

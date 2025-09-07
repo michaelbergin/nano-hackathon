@@ -4,7 +4,7 @@ import { jwtVerify } from "jose";
 
 function getSecret(): Uint8Array {
   const secret = process.env.AUTH_SECRET;
-  if (!secret) {
+  if (secret == null || secret === "") {
     throw new Error("AUTH_SECRET is not set");
   }
   return new TextEncoder().encode(secret);
@@ -27,7 +27,7 @@ export async function middleware(req: NextRequest) {
 
   // Require auth cookie for everything else (including "/")
   const token = req.cookies.get("auth")?.value;
-  if (!token) {
+  if (token == null || token === "") {
     const url = req.nextUrl.clone();
     url.pathname = "/account/login";
     return NextResponse.redirect(url);

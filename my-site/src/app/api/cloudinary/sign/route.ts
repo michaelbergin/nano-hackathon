@@ -1,10 +1,12 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
+import { cookies } from "next/headers";
+import { verifyAuthToken } from "@/lib/auth";
 
 function ensureConfigured(): void {
   const url = process.env.CLOUDINARY_URL;
-  if (!url) {
+  if (url == null || url === "") {
     throw new Error("CLOUDINARY_URL is not set");
   }
   cloudinary.config({ cloudinary_url: url });
@@ -12,14 +14,30 @@ function ensureConfigured(): void {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth")?.value ?? null;
+    if (token == null) {
+      return NextResponse.json(
+        { ok: false, error: "Not authenticated" },
+        { status: 401 }
+      );
+    }
+    const payload = await verifyAuthToken(token);
+    if (payload == null) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid token" },
+        { status: 401 }
+      );
+    }
     ensureConfigured();
     const body = (await req.json()) as unknown;
     const params =
-      body &&
+      body != null &&
       typeof body === "object" &&
-      "params" in (body as Record<string, unknown>)
+      !Array.isArray(body) &&
+      "params" in body
         ? (body as { params: Record<string, string | number | undefined> })
-            .params ?? {}
+            .params
         : {};
 
     // Basic allowlist: only allow certain parameters to be signed to avoid abuse
@@ -27,6 +45,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       "timestamp",
       "folder",
       "public_id",
+      "overwrite",
+      "invalidate",
       "sources",
       "asset_folder",
       "tags",
@@ -39,12 +59,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       if (!allowedKeys.has(k)) {
         continue;
       }
-      if (v === undefined || v === null) {
+      if (v == null) {
         continue;
       }
       toSign[k] = String(v);
     }
-    if (!toSign.timestamp) {
+    if (toSign.timestamp === "") {
       toSign.timestamp = String(Math.floor(Date.now() / 1000));
     }
 

@@ -4,12 +4,13 @@ import type { JSX, ChangeEvent } from "react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import CanvasBoardControls from "./CanvasBoardControls";
 import {
-  boardReducer,
   createLayer,
+  createBackgroundLayer,
   drawPathOnContext,
   generateLayerId,
   getCanvasScreenshotAsync,
 } from "./canvasUtils";
+import { boardReducer } from "./canvasBoardReducer";
 // UI components integrated with CanvasBoardControls
 
 export type Point2 = [number, number];
@@ -46,10 +47,16 @@ export type ImageLayer = BaseLayer & {
   height?: number;
 };
 
-export type Layer = VectorLayer | ImageLayer;
+export type BackgroundLayer = BaseLayer & {
+  type: "background";
+  color: string;
+};
+
+export type Layer = VectorLayer | ImageLayer | BackgroundLayer;
 
 export type BoardMode = "draw" | "erase" | "move";
 
+export type BoardSnapshot = { layers: Layer[]; activeLayerId: string };
 export type BoardState = {
   layers: Layer[];
   activeLayerId: string;
@@ -57,6 +64,8 @@ export type BoardState = {
   strokeColor: string;
   brushSize: number;
   compositeDataUrl: string | null;
+  past: BoardSnapshot[];
+  future: BoardSnapshot[];
 };
 
 export type BoardAction =
@@ -64,6 +73,7 @@ export type BoardAction =
   | { type: "REMOVE_LAYER"; id: string }
   | { type: "SELECT_LAYER"; id: string }
   | { type: "TOGGLE_LAYER_VISIBILITY"; id: string }
+  | { type: "CLEAR_LAYER"; id: string }
   | { type: "RENAME_LAYER"; id: string; name: string }
   | { type: "REORDER_LAYERS"; order: string[] }
   | { type: "ADD_STROKE_TO_ACTIVE"; stroke: PathStroke }
@@ -82,6 +92,7 @@ export type BoardAction =
       width: number;
       height: number;
     }
+  | { type: "SET_BACKGROUND_COLOR"; id: string; color: string }
   | { type: "ENSURE_ACTIVE_VECTOR_LAYER" }
   | { type: "CLEAR_ACTIVE_LAYER" }
   | { type: "CLEAR_ALL_LAYERS" }
@@ -89,11 +100,19 @@ export type BoardAction =
   | { type: "SET_COLOR"; color: string }
   | { type: "SET_BRUSH_SIZE"; size: number }
   | { type: "LOAD_FROM_DATA"; layers: Layer[] }
-  | { type: "SET_COMPOSITE"; dataUrl: string | null };
+  | { type: "SET_COMPOSITE"; dataUrl: string | null }
+  | { type: "UNDO" }
+  | { type: "REDO" };
 
+/**
+ * Props for CanvasBoard.
+ * onScreenshot: optional callback invoked with a PNG data URL whenever a screenshot is explicitly captured
+ * (via the Screenshot action) or when generation runs and a composite is produced.
+ */
 interface CanvasBoardProps {
   initialData?: string;
   onSave?: (data: string) => void;
+  onScreenshot?: (dataUrl: string) => void | Promise<void>;
 }
 
 // Target frame rate for canvas redraws
@@ -103,6 +122,7 @@ const FRAME_TIME = 1000 / TARGET_FPS;
 export function CanvasBoard({
   initialData,
   onSave,
+  onScreenshot,
 }: CanvasBoardProps = {}): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -138,18 +158,25 @@ export function CanvasBoard({
   const [isDraggingUi, setIsDraggingUi] = useState<boolean>(false);
 
   const [state, dispatch] = useReducer(boardReducer, {
-    layers: [createLayer("Layer 1")],
+    layers: [createBackgroundLayer("#ffffff"), createLayer("Layer 1")],
     activeLayerId: "",
     mode: "draw",
     strokeColor: "#111827",
     brushSize: 4,
     compositeDataUrl: null,
+    past: [],
+    future: [],
   });
 
-  // Ensure activeLayerId is set to first layer on mount
+  // Ensure activeLayerId is set to first non-background layer on mount
   useEffect(() => {
     if (!state.activeLayerId && state.layers.length > 0) {
-      dispatch({ type: "SELECT_LAYER", id: state.layers[0].id });
+      const firstDrawable = state.layers.find((l) => l.type !== "background");
+      if (firstDrawable) {
+        dispatch({ type: "SELECT_LAYER", id: firstDrawable.id });
+      } else {
+        dispatch({ type: "SELECT_LAYER", id: state.layers[0].id });
+      }
     }
   }, [state.activeLayerId, state.layers]);
 
@@ -172,67 +199,65 @@ export function CanvasBoard({
       ) {
         const maybe = (parsed as { layers: unknown }).layers;
         if (Array.isArray(maybe)) {
-          const layers: Layer[] = maybe
-            .map((l) => {
-              const obj = l as Partial<
-                Layer & { type?: string; imageSrc?: string }
-              >;
-              if (!obj || typeof obj !== "object") {
-                return null;
-              }
-              const id =
-                typeof obj.id === "string" ? obj.id : generateLayerId();
-              const name =
-                typeof (obj as BaseLayer).name === "string"
-                  ? (obj as BaseLayer).name
-                  : "Layer";
-              const visible =
-                typeof (obj as BaseLayer).visible === "boolean"
-                  ? (obj as BaseLayer).visible
-                  : true;
-              if (
-                (obj as ImageLayer).type === "image" &&
-                typeof (obj as ImageLayer).imageSrc === "string"
-              ) {
-                const imgObj = obj as ImageLayer;
-                return {
-                  id,
-                  name,
-                  visible,
-                  type: "image",
-                  imageSrc: imgObj.imageSrc,
-                  banana: imgObj.banana ?? false,
-                  x: typeof imgObj.x === "number" ? imgObj.x : undefined,
-                  y: typeof imgObj.y === "number" ? imgObj.y : undefined,
-                  width:
-                    typeof imgObj.width === "number" ? imgObj.width : undefined,
-                  height:
-                    typeof imgObj.height === "number"
-                      ? imgObj.height
-                      : undefined,
-                } as ImageLayer;
-              }
-              const strokes = Array.isArray((obj as VectorLayer).strokes)
-                ? ((obj as VectorLayer).strokes as PathStroke[])
-                : [];
-              const vecObj = obj as VectorLayer;
+          const layers: Layer[] = maybe.map((l) => {
+            const obj = l as Partial<
+              Layer & { type?: string; imageSrc?: string }
+            >;
+            const id = typeof obj.id === "string" ? obj.id : generateLayerId();
+            const name =
+              typeof (obj as BaseLayer).name === "string"
+                ? (obj as BaseLayer).name
+                : "Layer";
+            const visible =
+              typeof (obj as BaseLayer).visible === "boolean"
+                ? (obj as BaseLayer).visible
+                : true;
+            if ((obj as { type?: string }).type === "background") {
+              const colorVal = (obj as { color?: unknown }).color;
+              const bg: BackgroundLayer = {
+                id,
+                name,
+                visible,
+                type: "background",
+                color: typeof colorVal === "string" ? colorVal : "#ffffff",
+              };
+              return bg;
+            } else if (
+              obj.type === "image" &&
+              typeof (obj as ImageLayer).imageSrc === "string"
+            ) {
+              const imgObj = obj as ImageLayer;
               return {
                 id,
                 name,
                 visible,
-                type: "vector",
-                strokes,
-                offsetX:
-                  typeof vecObj.offsetX === "number"
-                    ? vecObj.offsetX
-                    : undefined,
-                offsetY:
-                  typeof vecObj.offsetY === "number"
-                    ? vecObj.offsetY
-                    : undefined,
-              } as VectorLayer;
-            })
-            .filter((x): x is Layer => x !== null);
+                type: "image",
+                imageSrc: imgObj.imageSrc,
+                banana: imgObj.banana ?? false,
+                x: typeof imgObj.x === "number" ? imgObj.x : undefined,
+                y: typeof imgObj.y === "number" ? imgObj.y : undefined,
+                width:
+                  typeof imgObj.width === "number" ? imgObj.width : undefined,
+                height:
+                  typeof imgObj.height === "number" ? imgObj.height : undefined,
+              } as ImageLayer;
+            }
+            const strokes = Array.isArray((obj as VectorLayer).strokes)
+              ? (obj as VectorLayer).strokes
+              : [];
+            const vecObj = obj as VectorLayer;
+            return {
+              id,
+              name,
+              visible,
+              type: "vector",
+              strokes,
+              offsetX:
+                typeof vecObj.offsetX === "number" ? vecObj.offsetX : undefined,
+              offsetY:
+                typeof vecObj.offsetY === "number" ? vecObj.offsetY : undefined,
+            } as VectorLayer;
+          });
           dispatch({ type: "LOAD_FROM_DATA", layers });
         }
       }
@@ -273,15 +298,26 @@ export function CanvasBoard({
     ): { x: number; y: number; width: number; height: number } | null => {
       const { cssW, cssH } = getCssSize();
       if (cssW === 0 || cssH === 0) return null;
+      if (layer.type === "background") {
+        return { x: 0, y: 0, width: cssW, height: cssH };
+      }
       if (layer.type === "image") {
-        let { x, y, width, height } = layer;
+        let bx: number;
+        let by: number;
+        let bw: number;
+        let bh: number;
+        const { x, y, width, height } = layer;
         if (
           typeof x === "number" &&
           typeof y === "number" &&
           typeof width === "number" &&
           typeof height === "number"
         ) {
-          return { x, y, width, height };
+          bx = x;
+          by = y;
+          bw = width;
+          bh = height;
+          return { x: bx, y: by, width: bw, height: bh };
         }
         const cached = imageCacheRef.current.get(layer.imageSrc) ?? null;
         if (cached) {
@@ -293,17 +329,17 @@ export function CanvasBoard({
           const imageAspectRatio = cached.width / cached.height;
           const canvasAspectRatio = cssW / cssH;
           if (imageAspectRatio > canvasAspectRatio) {
-            width = cssW;
-            height = cssW / imageAspectRatio;
-            x = 0;
-            y = (cssH - height) / 2;
+            bw = cssW;
+            bh = cssW / imageAspectRatio;
+            bx = 0;
+            by = (cssH - bh) / 2;
           } else {
-            height = cssH;
-            width = cssH * imageAspectRatio;
-            x = (cssW - width) / 2;
-            y = 0;
+            bh = cssH;
+            bw = cssH * imageAspectRatio;
+            bx = (cssW - bw) / 2;
+            by = 0;
           }
-          return { x, y, width, height };
+          return { x: bx, y: by, width: bw, height: bh };
         }
         // Fallback: assume full canvas until image loads
         return { x: 0, y: 0, width: cssW, height: cssH };
@@ -352,6 +388,7 @@ export function CanvasBoard({
       for (let i = state.layers.length - 1; i >= 0; i--) {
         const l = state.layers[i];
         if (!l.visible) continue;
+        if (l.type === "background") continue;
         const rect = getLayerBoundingRect(l);
         if (!rect) continue;
         if (
@@ -433,7 +470,12 @@ export function CanvasBoard({
       }
       octx.clearRect(0, 0, off.width, off.height);
 
-      if (layer.type === "image") {
+      if (layer.type === "background") {
+        octx.save();
+        octx.fillStyle = layer.color;
+        octx.fillRect(0, 0, cssW, cssH);
+        octx.restore();
+      } else if (layer.type === "image") {
         const cached = imageCacheRef.current.get(layer.imageSrc) ?? null;
         if (cached) {
           // Special handling for banana-generated images - cover entire canvas frame
@@ -492,13 +534,7 @@ export function CanvasBoard({
                 y = 0;
               }
             }
-            octx.drawImage(
-              cached,
-              x as number,
-              y as number,
-              width as number,
-              height as number
-            );
+            octx.drawImage(cached, x, y, width, height);
           }
         }
       } else {
@@ -613,8 +649,6 @@ export function CanvasBoard({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    ctx.lineWidth = state.brushSize;
-    ctx.strokeStyle = state.strokeColor;
     ctxRef.current = ctx;
 
     // Initialize or resize offscreen layer canvas to match
@@ -633,13 +667,24 @@ export function CanvasBoard({
       offscreenCtxRef.current = octx;
     }
     requestRender();
-  }, [state.brushSize, state.strokeColor, requestRender]);
+  }, [requestRender]);
 
   useEffect(() => {
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
     return () => window.removeEventListener("resize", resizeCanvas);
   }, [resizeCanvas]);
+
+  // Update drawing styles without resizing to avoid clearing the canvas
+  useEffect(() => {
+    const ctx = ctxRef.current;
+    if (ctx) {
+      ctx.lineWidth = state.brushSize;
+      ctx.strokeStyle = state.strokeColor;
+    }
+    // Offscreen context uses per-stroke styles, but we still request a redraw
+    requestRender();
+  }, [state.brushSize, state.strokeColor, requestRender]);
 
   // Ensure an image is loaded and cached. Triggers redraw on load.
   const ensureImageLoaded = useCallback(
@@ -697,7 +742,7 @@ export function CanvasBoard({
       if (evt.button !== 0) {
         return;
       }
-      (evt.target as Element).setPointerCapture?.(evt.pointerId);
+      (evt.target as Element).setPointerCapture(evt.pointerId);
       const [x, y] = getRelativePoint(evt);
       if (state.mode === "move") {
         const idx = hitTestLayers(x, y);
@@ -762,9 +807,7 @@ export function CanvasBoard({
         let dy = y - drag.lastY;
         // axis lock with Shift
         if (evt.shiftKey) {
-          if (!drag.axis) {
-            drag.axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
-          }
+          drag.axis ??= Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
           if (drag.axis === "x") dy = 0;
           else dx = 0;
         } else {
@@ -790,7 +833,7 @@ export function CanvasBoard({
       }
 
       // Prefer coalesced events for smoother Apple Pencil input when available
-      const coalesced = (evt.getCoalescedEvents?.() ?? []) as PointerEvent[];
+      const coalesced = evt.getCoalescedEvents();
       const prev = curr.points;
       const pushIfFar = (x: number, y: number): void => {
         const n = prev.length;
@@ -821,7 +864,7 @@ export function CanvasBoard({
 
   const onPointerUp = useCallback(
     (evt: PointerEvent): void => {
-      (evt.target as Element).releasePointerCapture?.(evt.pointerId);
+      (evt.target as Element).releasePointerCapture(evt.pointerId);
       if (state.mode === "move") {
         isDraggingRef.current = false;
         dragInfoRef.current = null;
@@ -872,7 +915,7 @@ export function CanvasBoard({
     const up = (e: Event): void => onPointerUp(e as PointerEvent);
     const cancel = (e: Event): void => {
       const evt = e as PointerEvent;
-      (evt.target as Element | null)?.releasePointerCapture?.(evt.pointerId);
+      (evt.target as Element | null)?.releasePointerCapture(evt.pointerId);
       if (state.mode === "move") {
         isDraggingRef.current = false;
         dragInfoRef.current = null;
@@ -960,8 +1003,15 @@ export function CanvasBoard({
         1 // Force DPR=1 for consistent screenshot size across devices
       );
       dispatch({ type: "SET_COMPOSITE", dataUrl });
+      try {
+        if (dataUrl && onScreenshot) {
+          await onScreenshot(dataUrl);
+        }
+      } catch {
+        // ignore upload errors here
+      }
     })();
-  }, [state.layers, getCssSize]);
+  }, [state.layers, getCssSize, onScreenshot]);
 
   const downloadComposite = useCallback(async (): Promise<void> => {
     const { cssW, cssH } = getCssSize();
@@ -1031,7 +1081,7 @@ export function CanvasBoard({
           cloudName?: string;
         };
         if (
-          !signJson?.ok ||
+          !signJson.ok ||
           !signJson.signature ||
           !signJson.params ||
           !signJson.cloudName
@@ -1073,17 +1123,13 @@ export function CanvasBoard({
 
   const onFileSelected = useCallback(
     async (e: ChangeEvent<HTMLInputElement>): Promise<void> => {
-      const file =
-        e.target.files && e.target.files[0] ? e.target.files[0] : null;
+      const file = e.target.files?.[0];
       e.target.value = "";
       if (!file) {
         return;
       }
-      let imageSrc: string | null = null;
-      imageSrc = await uploadToCloudinary(file);
-      if (!imageSrc) {
-        imageSrc = URL.createObjectURL(file);
-      }
+      let imageSrc = await uploadToCloudinary(file);
+      imageSrc ??= URL.createObjectURL(file);
       dispatch({
         type: "ADD_IMAGE_LAYER_TOP",
         name: file.name || "Image Layer",
@@ -1110,16 +1156,24 @@ export function CanvasBoard({
         Math.max(1, Math.floor(cssH)),
         1 // Force DPR=1 for consistent screenshot size across devices
       );
+      // Fire onScreenshot for immediate thumbnail updates when generating
+      try {
+        if (composite && onScreenshot) {
+          await onScreenshot(composite);
+        }
+      } catch {
+        // ignore upload errors
+      }
       const res = await fetch("/api/nano-banana", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: bananaPrompt, images: [composite] }),
       });
       const json = (await res.json()) as { ok?: boolean; image?: string };
-      if (json?.ok && typeof json.image === "string" && json.image) {
+      if (json.ok && typeof json.image === "string" && json.image) {
         dispatch({
           type: "ADD_IMAGE_LAYER_TOP",
-          name: "Banana Layer",
+          name: "Generated Image",
           imageSrc: json.image,
           banana: true,
         });
@@ -1129,33 +1183,26 @@ export function CanvasBoard({
     } finally {
       setIsGenerating(false);
     }
-  }, [isGenerating, state.layers, bananaPrompt, getCssSize]);
+  }, [isGenerating, state.layers, bananaPrompt, getCssSize, onScreenshot]);
 
   // Create controls state and actions
   const controlsState = {
     mode: state.mode,
     strokeColor: state.strokeColor,
     brushSize: state.brushSize,
-    layers: state.layers,
-    activeLayerId: state.activeLayerId,
     compositeDataUrl: state.compositeDataUrl,
     isGenerating,
     bananaPrompt,
-    panelsCollapsed,
+    panelsCollapsed: {
+      tools: panelsCollapsed.tools,
+      actions: panelsCollapsed.actions,
+      banana: panelsCollapsed.banana,
+    },
+    canUndo: state.past.length > 0,
+    canRedo: state.future.length > 0,
   };
 
   const controlsActions = {
-    addLayer: () => dispatch({ type: "ADD_LAYER" }),
-    removeLayer: (id: string) => dispatch({ type: "REMOVE_LAYER", id }),
-    selectLayer: (id: string) => dispatch({ type: "SELECT_LAYER", id }),
-    toggleLayerVisibility: (id: string) =>
-      dispatch({ type: "TOGGLE_LAYER_VISIBILITY", id }),
-    reorderLayers: (orderTopToBottom: string[]) => {
-      // internal reducer expects bottom->top order
-      const bottomToTop = [...orderTopToBottom].reverse();
-      dispatch({ type: "REORDER_LAYERS", order: bottomToTop });
-      requestRender();
-    },
     setMode: (mode: BoardMode) => dispatch({ type: "SET_MODE", mode }),
     setColor: (color: string) => dispatch({ type: "SET_COLOR", color }),
     setBrushSize: (size: number) => dispatch({ type: "SET_BRUSH_SIZE", size }),
@@ -1169,7 +1216,28 @@ export function CanvasBoard({
     togglePanelCollapsed: (panel: keyof typeof panelsCollapsed) => {
       setPanelsCollapsed((prev) => ({ ...prev, [panel]: !prev[panel] }));
     },
-  };
+    undo: () => dispatch({ type: "UNDO" }),
+    redo: () => dispatch({ type: "REDO" }),
+  } as const;
+
+  const layerActions = {
+    addLayer: () => dispatch({ type: "ADD_LAYER" }),
+    removeLayer: (id: string) => dispatch({ type: "REMOVE_LAYER", id }),
+    selectLayer: (id: string) => dispatch({ type: "SELECT_LAYER", id }),
+    toggleLayerVisibility: (id: string) =>
+      dispatch({ type: "TOGGLE_LAYER_VISIBILITY", id }),
+    clearLayer: (id: string) => dispatch({ type: "CLEAR_LAYER", id }),
+    reorderLayers: (orderTopToBottom: string[]) => {
+      // internal reducer expects bottom->top order
+      const bottomToTop = [...orderTopToBottom].reverse();
+      dispatch({ type: "REORDER_LAYERS", order: bottomToTop });
+      requestRender();
+    },
+    setBackgroundColor: (id: string, color: string) => {
+      dispatch({ type: "SET_BACKGROUND_COLOR", id, color });
+      requestRender();
+    },
+  } as const;
 
   return (
     <div className="relative w-full h-full overflow-hidden">
@@ -1191,6 +1259,13 @@ export function CanvasBoard({
         state={controlsState}
         actions={controlsActions}
         fileInputRef={fileInputRef}
+        layers={state.layers}
+        activeLayerId={state.activeLayerId}
+        layerActions={layerActions}
+        layersPanelCollapsed={panelsCollapsed.layers}
+        onToggleLayersPanel={() => {
+          setPanelsCollapsed((prev) => ({ ...prev, layers: !prev.layers }));
+        }}
       />
 
       {/* Hidden file input for upload functionality */}

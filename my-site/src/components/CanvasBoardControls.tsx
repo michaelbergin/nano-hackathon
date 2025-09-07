@@ -1,74 +1,45 @@
 "use client";
 
-import type { JSX, ChangeEvent, RefObject, CSSProperties } from "react";
-import { memo, useMemo } from "react";
-import type { BoardMode, Layer, ImageLayer } from "./CanvasBoard";
-import type { DragEndEvent } from "@dnd-kit/core";
-import {
-  DndContext,
-  PointerSensor,
-  closestCenter,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  arrayMove,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import type { JSX, ChangeEvent, RefObject } from "react";
+import { memo } from "react";
+import { createPortal } from "react-dom";
+import type { BoardMode, Layer } from "./CanvasBoard";
+import LayerControls from "./LayerControls";
 import {
   Pencil,
   Eraser,
   Palette,
-  Trash2,
   RotateCcw,
+  RotateCw,
   Camera,
-  Download,
-  Upload,
-  Plus,
-  Eye,
-  EyeOff,
-  X,
   Banana,
-  Layers,
   Settings,
-  Image as ImageIcon,
   Move as MoveIcon,
-  GripVertical,
-  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { ChevronDown } from "lucide-react";
 
 export type CanvasControlsState = {
   mode: BoardMode;
   strokeColor: string;
   brushSize: number;
-  layers: Layer[];
-  activeLayerId: string;
   compositeDataUrl: string | null;
   isGenerating: boolean;
   bananaPrompt: string;
   panelsCollapsed: {
     tools: boolean;
     actions: boolean;
-    layers: boolean;
     banana: boolean;
   };
+  canUndo: boolean;
+  canRedo: boolean;
 };
 
 export type CanvasControlsActions = {
-  addLayer: (name?: string) => void;
-  removeLayer: (id: string) => void;
-  selectLayer: (id: string) => void;
-  toggleLayerVisibility: (id: string) => void;
-  reorderLayers: (orderTopToBottom: string[]) => void;
   setMode: (mode: BoardMode) => void;
   setColor: (color: string) => void;
   setBrushSize: (size: number) => void;
@@ -82,12 +53,27 @@ export type CanvasControlsActions = {
   togglePanelCollapsed: (
     panel: keyof CanvasControlsState["panelsCollapsed"]
   ) => void;
+  undo: () => void;
+  redo: () => void;
 };
 
 export interface CanvasBoardControlsProps {
   state: CanvasControlsState;
   actions: CanvasControlsActions;
   fileInputRef: RefObject<HTMLInputElement | null>;
+  layers: Layer[];
+  activeLayerId: string;
+  layerActions: {
+    addLayer: (name?: string) => void;
+    removeLayer: (id: string) => void;
+    selectLayer: (id: string) => void;
+    toggleLayerVisibility: (id: string) => void;
+    clearLayer: (id: string) => void;
+    reorderLayers: (orderTopToBottom: string[]) => void;
+    setBackgroundColor?: (id: string, color: string) => void;
+  };
+  layersPanelCollapsed: boolean;
+  onToggleLayersPanel: () => void;
 }
 
 interface CollapsibleCardHeaderProps {
@@ -148,37 +134,117 @@ function CanvasBoardControlsBase({
   state,
   actions,
   fileInputRef,
+  layers,
+  activeLayerId,
+  layerActions,
+  layersPanelCollapsed,
+  onToggleLayersPanel,
 }: CanvasBoardControlsProps): JSX.Element {
   const drawActive = state.mode === "draw";
-  const activeLayerId = state.activeLayerId;
-
-  // Display top-most layer first in UI (top -> bottom)
-  const layersTopToBottom = useMemo(() => {
-    return [...state.layers].reverse();
-  }, [state.layers]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor)
-  );
-
-  const onDragEnd = (event: DragEndEvent): void => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) {
-      return;
-    }
-    const ids = layersTopToBottom.map((l) => l.id);
-    const oldIndex = ids.indexOf(String(active.id));
-    const newIndex = ids.indexOf(String(over.id));
-    if (oldIndex === -1 || newIndex === -1) {
-      return;
-    }
-    const nextIds = arrayMove(ids, oldIndex, newIndex);
-    actions.reorderLayers(nextIds);
-  };
 
   return (
     <>
+      {/* Banana Generation Loading Overlay */}
+      {state.isGenerating &&
+        typeof window !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm pointer-events-auto">
+            <div className="relative w-[320px] h-[320px]">
+              {/* Inner ring spinning clockwise */}
+              {Array.from({ length: 12 }).map((_, index) => {
+                const angle = (index / 12) * 2 * Math.PI;
+                const radius = 80;
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                const delay = index * 0.1;
+
+                return (
+                  <div
+                    key={`inner-${index}`}
+                    className="absolute w-8 h-8 flex items-center justify-center"
+                    style={{
+                      left: `calc(50% + ${x}px)`,
+                      top: `calc(50% + ${y}px)`,
+                      transform: "translate(-50%, -50%)",
+                    }}
+                  >
+                    <div
+                      className="animate-spin"
+                      style={{
+                        animationDelay: `${delay}s`,
+                        animationDuration: "2s",
+                        animationTimingFunction: "ease-in-out",
+                        animationIterationCount: "infinite",
+                      }}
+                    >
+                      <Banana
+                        className="w-6 h-6 text-yellow-400 drop-shadow-lg"
+                        style={{
+                          filter: "drop-shadow(0 0 4px rgba(255, 255, 0, 0.6))",
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Outer ring spinning counter-clockwise */}
+              {Array.from({ length: 16 }).map((_, index) => {
+                const angle = (index / 16) * 2 * Math.PI;
+                const radius = 120;
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                const delay = index * 0.08;
+
+                return (
+                  <div
+                    key={`outer-${index}`}
+                    className="absolute w-7 h-7 flex items-center justify-center"
+                    style={{
+                      left: `calc(50% + ${x}px)`,
+                      top: `calc(50% + ${y}px)`,
+                      transform: "translate(-50%, -50%)",
+                    }}
+                  >
+                    <div
+                      className="animate-spin"
+                      style={{
+                        animationDelay: `${delay}s`,
+                        animationDuration: "1.6s",
+                        animationTimingFunction: "ease-in-out",
+                        animationIterationCount: "infinite",
+                        animationDirection: "reverse",
+                      }}
+                    >
+                      <Banana
+                        className="w-5 h-5 text-yellow-300 drop-shadow"
+                        style={{
+                          filter: "drop-shadow(0 0 3px rgba(255, 255, 0, 0.6))",
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Center pulsing banana */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="animate-pulse">
+                  <Banana
+                    className="w-12 h-12 text-yellow-300 drop-shadow-2xl"
+                    style={{
+                      filter: "drop-shadow(0 0 8px rgba(255, 255, 0, 0.8))",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Loading text removed by request */}
+            </div>
+          </div>,
+          document.body
+        )}
+
       {/* Left column: Tools, Actions, Preview */}
       <div className="pointer-events-none absolute top-4 left-4 z-10">
         <div className="pointer-events-auto flex flex-col gap-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
@@ -197,9 +263,9 @@ function CanvasBoardControlsBase({
               onToggle={actions.togglePanelCollapsed}
             />
             {!state.panelsCollapsed.tools && (
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-2">
                 {/* Mode Selection */}
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-1">
                   <Button
                     variant={drawActive ? "default" : "outline"}
                     size="sm"
@@ -230,8 +296,8 @@ function CanvasBoardControlsBase({
                 </div>
 
                 {/* Brush Settings */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1">
                     <Palette className="h-4 w-4 text-muted-foreground" />
                     <Label className="text-sm font-medium">Color</Label>
                     <Input
@@ -244,7 +310,7 @@ function CanvasBoardControlsBase({
                     />
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1">
                     <div className="h-4 w-4 rounded-full border-2 border-muted-foreground flex items-center justify-center">
                       <div
                         className="h-2 w-2 rounded-full"
@@ -252,7 +318,7 @@ function CanvasBoardControlsBase({
                       />
                     </div>
                     <Label className="text-sm font-medium flex-1">Size</Label>
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-1 min-w-0">
                       <Input
                         type="range"
                         min={1}
@@ -268,6 +334,30 @@ function CanvasBoardControlsBase({
                       </span>
                     </div>
                   </div>
+                </div>
+
+                {/* Undo/Redo Controls */}
+                <div className="grid grid-cols-2 gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={actions.undo}
+                    disabled={!state.canUndo}
+                    className="text-xs"
+                  >
+                    <RotateCcw className="h-3 w-3 mr-1" />
+                    Undo
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={actions.redo}
+                    disabled={!state.canRedo}
+                    className="text-xs"
+                  >
+                    <RotateCw className="h-3 w-3 mr-1" />
+                    Redo
+                  </Button>
                 </div>
               </CardContent>
             )}
@@ -288,26 +378,8 @@ function CanvasBoardControlsBase({
               onToggle={actions.togglePanelCollapsed}
             />
             {!state.panelsCollapsed.actions && (
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={actions.clearActive}
-                    className="text-xs"
-                  >
-                    <RotateCcw className="h-3 w-3 mr-1" />
-                    Clear Active
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={actions.clearAll}
-                    className="text-xs"
-                  >
-                    <Trash2 className="h-3 w-3 mr-1" />
-                    Clear All
-                  </Button>
+              <CardContent className="space-y-1">
+                <div className="grid grid-cols-1 gap-1">
                   <Button
                     variant="outline"
                     size="sm"
@@ -316,35 +388,6 @@ function CanvasBoardControlsBase({
                   >
                     <Camera className="h-3 w-3 mr-1" />
                     Screenshot
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      void actions.downloadComposite();
-                    }}
-                    className="text-xs"
-                  >
-                    <Download className="h-3 w-3 mr-1" />
-                    Download
-                  </Button>
-                </div>
-
-                <div className="pt-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={actions.openUpload}
-                    className="w-full text-xs"
-                  >
-                    <Upload className="h-3 w-3 mr-2" />
-                    Upload Image
                   </Button>
                 </div>
               </CardContent>
@@ -383,63 +426,23 @@ function CanvasBoardControlsBase({
 
       {/* Layers menu at top right */}
       <div className="pointer-events-none absolute top-4 right-4 z-10">
-        <div className="pointer-events-auto">
-          <Card
-            collapsed={state.panelsCollapsed.layers}
-            className={`shadow-lg transition-all duration-200 ${
-              state.panelsCollapsed.layers ? "w-16" : "w-80"
-            }`}
-          >
-            <CollapsibleCardHeader
-              title="Layers"
-              icon={<Layers className="h-4 w-4" />}
-              panel="layers"
-              isCollapsed={state.panelsCollapsed.layers}
-              onToggle={actions.togglePanelCollapsed}
-            />
-            {!state.panelsCollapsed.layers && (
-              <CardContent className="space-y-3">
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={onDragEnd}
-                >
-                  <SortableContext
-                    items={layersTopToBottom.map((l) => l.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <div className="max-h-[calc(100vh-12rem)] overflow-y-auto space-y-2">
-                      {layersTopToBottom.map((layer) => {
-                        const isActive = layer.id === activeLayerId;
-                        return (
-                          <SortableLayerRow
-                            key={layer.id}
-                            id={layer.id}
-                            isActive={isActive}
-                            layer={layer}
-                            onSelect={actions.selectLayer}
-                            onToggleVisibility={actions.toggleLayerVisibility}
-                            onRemove={actions.removeLayer}
-                            canRemove={state.layers.length > 1}
-                          />
-                        );
-                      })}
-                    </div>
-                  </SortableContext>
-                </DndContext>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => actions.addLayer()}
-                  className="w-full"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Layer
-                </Button>
-              </CardContent>
-            )}
-          </Card>
+        <div className="pointer-events-auto overflow-hidden">
+          <LayerControls
+            layers={layers}
+            activeLayerId={activeLayerId}
+            isCollapsed={layersPanelCollapsed}
+            onToggleCollapsed={onToggleLayersPanel}
+            onAddLayer={layerActions.addLayer}
+            onRemoveLayer={layerActions.removeLayer}
+            onSelectLayer={layerActions.selectLayer}
+            onToggleLayerVisibility={layerActions.toggleLayerVisibility}
+            onClearLayer={layerActions.clearLayer}
+            onReorderLayers={layerActions.reorderLayers}
+            onSetBackgroundColor={layerActions.setBackgroundColor}
+            onDownload={actions.downloadComposite}
+            onUpload={actions.openUpload}
+            fileInputRef={fileInputRef}
+          />
         </div>
       </div>
 
@@ -460,7 +463,7 @@ function CanvasBoardControlsBase({
               onToggle={actions.togglePanelCollapsed}
             />
             {!state.panelsCollapsed.banana && (
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-1">
                 <Button
                   onClick={actions.generateBanana}
                   disabled={state.isGenerating}
@@ -470,7 +473,7 @@ function CanvasBoardControlsBase({
                   {state.isGenerating ? "Generating…" : "Generate Banana Layer"}
                 </Button>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="bananaPrompt" className="text-sm font-medium">
                     Prompt
                   </Label>
@@ -482,7 +485,7 @@ function CanvasBoardControlsBase({
                       actions.setBananaPrompt(e.target.value)
                     }
                     className="text-sm resize-none"
-                    rows={3}
+                    rows={2}
                   />
                 </div>
               </CardContent>
@@ -496,106 +499,3 @@ function CanvasBoardControlsBase({
 
 const CanvasBoardControls = memo(CanvasBoardControlsBase);
 export default CanvasBoardControls;
-
-interface SortableLayerRowProps {
-  id: string;
-  isActive: boolean;
-  layer: Layer;
-  onSelect: (id: string) => void;
-  onToggleVisibility: (id: string) => void;
-  onRemove: (id: string) => void;
-  canRemove: boolean;
-}
-
-function SortableLayerRow({
-  id,
-  isActive,
-  layer,
-  onSelect,
-  onToggleVisibility,
-  onRemove,
-  canRemove,
-}: SortableLayerRowProps): JSX.Element {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
-  const style: CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`flex items-center gap-2 p-2 rounded-md border transition-colors ${
-        isActive
-          ? "bg-primary/10 border-primary/20"
-          : "bg-muted/50 hover:bg-muted"
-      } ${isDragging ? "opacity-75" : ""}`}
-    >
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-8 w-8 p-0 cursor-grab active:cursor-grabbing"
-        title="Drag to reorder"
-        suppressHydrationWarning
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-3 w-3" />
-      </Button>
-
-      <Button
-        variant={isActive ? "default" : "ghost"}
-        size="sm"
-        onClick={() => onSelect(id)}
-        className="flex-1 justify-start text-left h-8 px-2"
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <div
-            className={`w-2 h-2 rounded-full ${
-              isActive ? "bg-primary-foreground" : "bg-muted-foreground"
-            }`}
-          />
-          <span className="truncate text-sm">{layer.name}</span>
-          {layer.type === "image" && (
-            <ImageIcon className="h-3 w-3 text-blue-500 flex-shrink-0" />
-          )}
-          {(layer as ImageLayer).banana && (
-            <Banana className="h-3 w-3 text-yellow-500 flex-shrink-0" />
-          )}
-        </div>
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => onToggleVisibility(id)}
-        className="h-8 w-8 p-0"
-        title={layer.visible ? "Hide layer" : "Show layer"}
-      >
-        {layer.visible ? (
-          <Eye className="h-3 w-3" />
-        ) : (
-          <EyeOff className="h-3 w-3" />
-        )}
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => onRemove(id)}
-        disabled={!canRemove}
-        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-        title="Delete layer"
-      >
-        <X className="h-3 w-3" />
-      </Button>
-    </div>
-  );
-}

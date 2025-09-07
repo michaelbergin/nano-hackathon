@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ProjectCanvas } from "./ProjectCanvas";
-import { Card, CardContent } from "@/components/ui/card";
+import { CanvasBoardContainer } from "@/components/CanvasBoardContainer";
 
 interface ProjectPageProps {
   params: Promise<{ id: string }>;
@@ -59,11 +59,9 @@ export default async function ProjectPage({
   return (
     <AppShell projectId={project.id} projectName={project.name}>
       <div className="w-full h-full grid grid-rows-[1fr] gap-4 overflow-hidden p-4">
-        <Card className="min-h-0 h-full">
-          <CardContent className="p-0 h-full">
-            <ProjectCanvas projectId={project.id} initialData={project.data} />
-          </CardContent>
-        </Card>
+        <CanvasBoardContainer className="min-h-0 h-full">
+          <ProjectCanvas projectId={project.id} initialData={project.data} />
+        </CanvasBoardContainer>
       </div>
     </AppShell>
   );

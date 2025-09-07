@@ -1,10 +1,8 @@
 import type {
-  BoardState,
-  BoardAction,
   Layer,
   VectorLayer,
-  ImageLayer,
   PathStroke,
+  BackgroundLayer,
 } from "./CanvasBoard";
 
 /**
@@ -26,6 +24,19 @@ export function createLayer(name: string): VectorLayer {
     visible: true,
     type: "vector",
     strokes: [],
+  };
+}
+
+/**
+ * Create a background layer with a solid color.
+ */
+export function createBackgroundLayer(color: string): BackgroundLayer {
+  return {
+    id: generateLayerId(),
+    name: "Background",
+    visible: true,
+    type: "background",
+    color,
   };
 }
 
@@ -70,100 +81,6 @@ export function drawPathOnContext(
 }
 
 /**
- * Generate a synchronous canvas screenshot from layers
- */
-export function getCanvasScreenshot(
-  layers: Layer[],
-  width: number,
-  height: number,
-  dprInput?: number
-): string {
-  const dpr = Math.max(
-    1,
-    Math.floor(
-      dprInput ??
-        (typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1)
-    )
-  );
-  const off = document.createElement("canvas");
-  off.width = Math.max(1, Math.floor(width * dpr));
-  off.height = Math.max(1, Math.floor(height * dpr));
-  const ctx = off.getContext("2d");
-  if (!ctx) {
-    return "";
-  }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-  // Per-layer compositing using an intermediate canvas ensures erasing remains scoped to the layer
-  const layerCanvas = document.createElement("canvas");
-  layerCanvas.width = off.width;
-  layerCanvas.height = off.height;
-  const layerCtx = layerCanvas.getContext("2d");
-  if (!layerCtx) {
-    return "";
-  }
-  layerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  layerCtx.lineJoin = "round";
-  layerCtx.lineCap = "round";
-  for (const layer of layers) {
-    if (!layer.visible) {
-      continue;
-    }
-    layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
-    if (layer.type === "image") {
-      const img = new window.Image();
-      img.crossOrigin = "anonymous";
-      img.src = layer.imageSrc;
-      let { x, y, width: w, height: h } = layer;
-      // We cannot await decode here; draw will be a no-op if not yet loaded
-      if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
-        if (
-          typeof x !== "number" ||
-          typeof y !== "number" ||
-          typeof w !== "number" ||
-          typeof h !== "number"
-        ) {
-          const imageAspectRatio = img.width / img.height || 1;
-          const canvasAspectRatio = width / height || 1;
-          if (imageAspectRatio > canvasAspectRatio) {
-            w = width;
-            h = width / imageAspectRatio;
-            x = 0;
-            y = (height - h) / 2;
-          } else {
-            h = height;
-            w = height * imageAspectRatio;
-            x = (width - w) / 2;
-            y = 0;
-          }
-        }
-        layerCtx.drawImage(
-          img,
-          x as number,
-          y as number,
-          w as number,
-          h as number
-        );
-      }
-    } else {
-      const dx = layer.offsetX ?? 0;
-      const dy = layer.offsetY ?? 0;
-      layerCtx.save();
-      if (dx !== 0 || dy !== 0) {
-        layerCtx.translate(dx, dy);
-      }
-      for (const stroke of layer.strokes) {
-        drawPathOnContext(layerCtx, stroke);
-      }
-      layerCtx.restore();
-    }
-    ctx.drawImage(layerCanvas, 0, 0);
-  }
-  return off.toDataURL("image/png");
-}
-
-/**
  * Generate an asynchronous canvas screenshot from layers (supports both vector and image layers)
  */
 export async function getCanvasScreenshotAsync(
@@ -176,14 +93,18 @@ export async function getCanvasScreenshotAsync(
     1,
     Math.floor(
       dprInput ??
-        (typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1)
+        (typeof window !== "undefined"
+          ? window.devicePixelRatio !== 0 && !isNaN(window.devicePixelRatio)
+            ? window.devicePixelRatio
+            : 1
+          : 1)
     )
   );
   const off = document.createElement("canvas");
   off.width = Math.max(1, Math.floor(width * dpr));
   off.height = Math.max(1, Math.floor(height * dpr));
   const ctx = off.getContext("2d");
-  if (!ctx) {
+  if (ctx == null) {
     return "";
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -194,7 +115,7 @@ export async function getCanvasScreenshotAsync(
   layerCanvas.width = off.width;
   layerCanvas.height = off.height;
   const layerCtx = layerCanvas.getContext("2d");
-  if (!layerCtx) {
+  if (layerCtx == null) {
     return "";
   }
   layerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -205,7 +126,12 @@ export async function getCanvasScreenshotAsync(
       continue;
     }
     layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
-    if (layer.type === "image") {
+    if (layer.type === "background") {
+      layerCtx.save();
+      layerCtx.fillStyle = layer.color;
+      layerCtx.fillRect(0, 0, width, height);
+      layerCtx.restore();
+    } else if (layer.type === "image") {
       const img = new window.Image();
       img.crossOrigin = "anonymous";
       img.src = layer.imageSrc;
@@ -218,8 +144,8 @@ export async function getCanvasScreenshotAsync(
         typeof h !== "number"
       ) {
         // aspect-fit into provided width/height
-        const imageAspectRatio = img.width / img.height || 1;
-        const canvasAspectRatio = width / height || 1;
+        const imageAspectRatio = img.height !== 0 ? img.width / img.height : 1;
+        const canvasAspectRatio = height !== 0 ? width / height : 1;
         if (imageAspectRatio > canvasAspectRatio) {
           w = width;
           h = width / imageAspectRatio;
@@ -232,13 +158,7 @@ export async function getCanvasScreenshotAsync(
           y = 0;
         }
       }
-      layerCtx.drawImage(
-        img,
-        x as number,
-        y as number,
-        w as number,
-        h as number
-      );
+      layerCtx.drawImage(img, x, y, w, h);
     } else {
       const dx = layer.offsetX ?? 0;
       const dy = layer.offsetY ?? 0;
@@ -260,9 +180,9 @@ export async function getCanvasScreenshotAsync(
  * Reducer for canvas board state. Logs key transitions to aid debugging.
  */
 export function boardReducer(
-  state: BoardState,
-  action: BoardAction
-): BoardState {
+  state: import("./CanvasBoard").BoardState,
+  action: import("./CanvasBoard").BoardAction
+): import("./CanvasBoard").BoardState {
   const log = (message: string, extra?: unknown): void => {
     if (typeof window !== "undefined") {
       console.debug(`[CanvasBoard] ${message}`, extra ?? "");
@@ -289,7 +209,7 @@ export function boardReducer(
     }
     case "ADD_IMAGE_LAYER_TOP": {
       const name = action.name ?? `Layer ${state.layers.length + 1}`;
-      const imageLayer: ImageLayer = {
+      const imageLayer: import("./CanvasBoard").ImageLayer = {
         id: generateLayerId(),
         name,
         visible: true,
@@ -322,11 +242,15 @@ export function boardReducer(
             const oy = (l.offsetY ?? 0) + action.dy;
             return { ...l, offsetX: ox, offsetY: oy } as VectorLayer;
           }
-          const x = (l.x ?? 0) + action.dx;
-          const y = (l.y ?? 0) + action.dy;
-          return { ...l, x, y } as ImageLayer;
+          if (l.type === "image") {
+            const x = (l.x ?? 0) + action.dx;
+            const y = (l.y ?? 0) + action.dy;
+            return { ...l, x, y } as import("./CanvasBoard").ImageLayer;
+          }
+          // Background layers don't move
+          return l;
         }),
-      };
+      } as const;
       log("MOVE_LAYER", { id: action.id, dx: action.dx, dy: action.dy });
       return next;
     }
@@ -344,7 +268,7 @@ export function boardReducer(
               }
             : l
         ),
-      };
+      } as const;
       log("SET_IMAGE_BOUNDS", { id: action.id });
       return next;
     }
@@ -374,7 +298,7 @@ export function boardReducer(
       const ordered: Layer[] = [];
       for (const id of action.order) {
         const layer = idToLayer.get(id);
-        if (layer) {
+        if (layer != null) {
           ordered.push(layer);
           idToLayer.delete(id);
         }
@@ -453,7 +377,7 @@ export function boardReducer(
       );
       const current =
         currentIndex >= 0 ? state.layers[currentIndex] : undefined;
-      if (current && current.type === "vector") {
+      if (current != null && current.type === "vector") {
         return state;
       }
       const nextLayer = createLayer(`Layer ${state.layers.length + 1}`);

@@ -50,6 +50,9 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
   const [recentProjects, setRecentProjects] = useState<
     Array<{ id: number; name: string; lastOpenedAt: number }>
   >([]);
+  const [lastActiveProjectId, setLastActiveProjectId] = useState<number | null>(
+    null
+  );
 
   // LocalStorage helpers for recent projects
   const RECENT_KEY = "recentProjects";
@@ -69,7 +72,7 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
         : [];
       const sanitized = Array.isArray(list) ? list : [];
       return sanitized.filter(
-        (p) => (p.name ?? "").trim().toLowerCase() !== "untitled"
+        (p) => p.name.trim().toLowerCase() !== "untitled"
       );
     } catch {
       return [];
@@ -103,6 +106,30 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
     setPendingName(projectName ?? "");
   }, [projectName]);
 
+  // Persist active project id and name for cross-page context
+  useEffect((): void => {
+    try {
+      if (projectId) {
+        localStorage.setItem("activeProjectId", String(projectId));
+        if (projectName) {
+          localStorage.setItem("activeProjectName", projectName);
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [projectId, projectName]);
+
+  // Load last active project id for pages without project context
+  useEffect((): void => {
+    try {
+      const raw = localStorage.getItem("activeProjectId");
+      setLastActiveProjectId(raw ? parseInt(raw, 10) : null);
+    } catch {
+      setLastActiveProjectId(null);
+    }
+  }, []);
+
   // Load recent projects on mount so they show in nav even when not on a project page
   useEffect((): void => {
     const list = loadRecents()
@@ -114,7 +141,7 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
   // When viewing a project, add/update it in recents with latest timestamp
   useEffect((): void => {
     if (!projectId || !projectName) return;
-    const trimmed = (projectName ?? "").trim();
+    const trimmed = projectName.trim();
     if (trimmed.toLowerCase() === "untitled") {
       return;
     }
@@ -147,7 +174,7 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
     if (!projectId) {
       return;
     }
-    const trimmed = (pendingName ?? "").trim();
+    const trimmed = pendingName.trim();
     if (!trimmed || trimmed === projectName) {
       setIsEditingName(false);
       setPendingName(projectName ?? "");
@@ -218,7 +245,15 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
                 New Project
               </Button>
             </Link>
-            <Link href="/create">
+            <Link
+              href={
+                projectId
+                  ? `/create?id=${projectId}`
+                  : lastActiveProjectId
+                  ? `/create?id=${lastActiveProjectId}`
+                  : "/projects"
+              }
+            >
               <Button variant="ghost" className="w-full justify-start">
                 <FileText className="h-4 w-4 mr-2" />
                 Create
@@ -300,7 +335,7 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
               title="Click to rename project"
               onClick={startEditingName}
             >
-              {pendingName || projectName || "Untitled"}
+              {(pendingName || projectName) ?? "Untitled"}
             </button>
           )}
         </div>

@@ -11,6 +11,14 @@ export default function NewProjectPage(): JSX.Element {
     let mounted = true;
     (async () => {
       try {
+        // If a project was just created in this session, reuse it to avoid duplicates
+        const existing = sessionStorage.getItem("justCreatedProjectId");
+        if (existing) {
+          sessionStorage.removeItem("justCreatedProjectId");
+          router.replace(`/create?id=${existing}`);
+          return;
+        }
+
         const res = await fetch("/api/projects", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -25,6 +33,16 @@ export default function NewProjectPage(): JSX.Element {
           return;
         }
         const data = await res.json();
+        try {
+          sessionStorage.setItem(
+            "justCreatedProjectId",
+            String(data.project.id)
+          );
+          localStorage.setItem("activeProjectId", String(data.project.id));
+          localStorage.setItem("activeProjectName", data.project.name ?? "");
+        } catch {
+          // ignore storage errors
+        }
         router.replace(`/create?id=${data.project.id}`);
       } catch {
         router.push("/projects");

@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { ProjectCanvas } from "../projects/[id]/ProjectCanvas";
 import { verifyAuthToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Card, CardContent } from "@/components/ui/card";
+import { CanvasBoardContainer } from "@/components/CanvasBoardContainer";
 
 interface CreatePageProps {
   searchParams: Promise<{ id?: string }>; // keep promise style consistent with other pages
@@ -39,11 +39,9 @@ export default async function CreatePage({
   return (
     <AppShell projectId={project.id} projectName={project.name}>
       <div className="w-full h-full grid grid-rows-[1fr] gap-4 overflow-hidden p-4">
-        <Card className="min-h-0 h-full">
-          <CardContent className="p-0 h-full">
-            <ProjectCanvas projectId={project.id} initialData={project.data} />
-          </CardContent>
-        </Card>
+        <CanvasBoardContainer className="min-h-0 h-full">
+          <ProjectCanvas projectId={project.id} initialData={project.data} />
+        </CanvasBoardContainer>
       </div>
     </AppShell>
   );

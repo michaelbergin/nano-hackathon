@@ -17,10 +17,10 @@ export function AppShell({
   projectName,
 }: AppShellProps): JSX.Element {
   return (
-    <div className="min-h-dvh grid grid-rows-[56px_1fr] grid-cols-1">
+    <div className="h-dvh grid grid-rows-[56px_1fr] grid-cols-1">
       <Header projectId={projectId} projectName={projectName} />
-      <div className="relative h-full">
-        <main className="h-full overflow-hidden">{children}</main>
+      <div className="relative min-h-0 overflow-hidden">
+        <main className="h-full min-h-0">{children}</main>
       </div>
     </div>
   );

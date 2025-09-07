@@ -59,7 +59,7 @@ Successfully implemented shadcn/ui components throughout the Banananano applicat
 #### 4. Project Page (`src/app/projects/[id]/page.tsx`)
 
 - **Before**: Basic layout with minimal styling
-- **After**: Professional card-based layout
+- **After**: Professional layout; canvas uses a dedicated `CanvasBoardContainer` (no vertical padding) instead of `Card` to allow the board to fill edge-to-edge.
 - **Improvements**:
   - Card containers for header and content
   - Badge component for metadata
@@ -160,6 +160,18 @@ All components are now production-ready with best-in-class UX and developer expe
 - Strokes: Each stroke is a polyline with `{ points: number[], color: string, size: number, erase: boolean }`.
 - State management: A reducer manages actions for adding/removing/selecting layers, toggling visibility, renaming, clearing, and adding strokes to the active layer.
 
+#### Undo/Redo — NEW
+
+- History: The board now maintains `past[]` and `future[]` snapshots (layers and activeLayerId only) to support undo/redo.
+- Undoable actions: layer add/remove/select/toggle-visibility/rename/reorder, stroke add, image layer add, move layer, set image bounds, ensure active vector layer, clear active/all.
+- Non-undoable actions: mode/color/brush size changes, data load, and composite updates.
+- UI: Added Undo/Redo buttons in the Actions card. They are disabled when not applicable.
+
+#### Reducer Extraction — NEW
+
+- The reducer moved from `src/components/canvasUtils.ts` to `src/components/canvasBoardReducer.ts` for clearer separation of concerns.
+- `CanvasBoard.tsx` imports the reducer from `canvasBoardReducer.ts` and now includes history in `BoardState` and `UNDO/REDO` in `BoardAction`.
+
 #### Performance Optimizations — NEW
 
 - 30fps scheduler: Canvas redraws are gated by a requestAnimationFrame scheduler targeting 30fps to reduce jank under load.
@@ -176,6 +188,15 @@ All components are now production-ready with best-in-class UX and developer expe
 - Rendering: Canvas draws from bottom to top; the reducer stores layers in bottom→top order internally.
 - New action: `REORDER_LAYERS` updates the reducer with the new order while preserving unknown ids safely.
 - Adding layers: New vector/image layers are added to the top of the stack and appear at the top of the list.
+
+### Background Layer — NEW
+
+- A non-draggable Background layer is always at the bottom of the stack.
+- Default color is white (`#ffffff`).
+- The background row shows a color picker. Changing it updates the canvas immediately.
+- Background can be deleted; if removed and no other background exists, a new white background will be added automatically on next load.
+- Background does not participate in hit-testing for move interactions.
+- Background renders first and is included in screenshots/composites.
 
 ### Persistence
 
@@ -197,6 +218,13 @@ All components are now production-ready with best-in-class UX and developer expe
   - `onGenerateBanana()` - For AI generation input
 - **Result**: Screenshots now capture the exact canvas region consistently across desktop, tablet, and mobile devices.
 
+### Canvas Flash on Brush/Color Change — FIXED
+
+- Issue: Changing brush size or stroke color caused the canvas to briefly clear/flash.
+- Root cause: `resizeCanvas()` was indirectly triggered by brush/color state changes, resizing the canvas element and clearing its pixel buffer.
+- Fix: Decoupled resize from style updates. `resizeCanvas()` now runs only on actual layout/DPR changes. A separate effect updates `ctx.lineWidth` and `ctx.strokeStyle` and requests a redraw without resizing.
+- Result: No flash when adjusting brush size or color; smooth redraws at the scheduled frame rate.
+
 ### Image Uploads & Cloudinary
 
 - Upload: An "Upload Image" button lets you pick an image file; it becomes a top image layer with an `img` badge. Image layers persist in project data like vector layers.
@@ -217,6 +245,18 @@ Signed uploads (fallback when no unsigned preset):
 - Generate button: Posts the current composite to `/api/nano-banana` with a prompt.
 - Prompt input: A shadcn `Input` labeled "Prompt" allows changing the text sent to generation. Default placeholder is `banana-fy` and initial value is `banana-fy`.
 - Result: The returned image URL is added as a topmost image layer with a yellow "banana" badge. Image layers are persisted in the same `layers` array with `{ type: "image", imageSrc, banana }`.
+
+#### Banana AI Loading Overlay — NEW
+
+- Behavior: While generation is in progress, a full-viewport loading overlay displays a radial array of spinning bananas orbiting a pulsing center banana.
+- Trigger: Overlay shows when `isGenerating === true` inside `CanvasBoardControls` (driven by `onGenerateBanana()` in `CanvasBoard.tsx`).
+- Implementation:
+  - Rendered via a portal to `document.body` with `z-[9999]` to avoid stacking context issues.
+  - Positioning (`translate(-50%, -50%)`) is separated from rotation by nesting an inner element with `animate-spin`, ensuring transforms do not conflict.
+  - Smooth staggered animation: 12 bananas, 0.1s delay increments, 2s duration, ease-in-out, infinite.
+- Files:
+  - `src/components/CanvasBoard.tsx` (sets `isGenerating` around the async call)
+  - `src/components/CanvasBoardControls.tsx` (renders overlay when `state.isGenerating`)
 
 ### Canvas Controls Extraction (CanvasBoardControls) ✅ COMPLETED
 
@@ -310,51 +350,67 @@ Acceptance:
 - Links: `New Project` (`/new`), `Create` (`/create?id=...`), `Projects` (`/projects`).
 - Header brand area includes a quick-create icon for fast entry to a new canvas.
 
-### Visibility Rule — Projects named "untitled"
+## Project Thumbnails & Periodic Screenshots — NEW
 
-- The projects index page (`src/app/projects/page.tsx`) filters out any projects whose name (case-insensitive) equals "untitled".
-- The header's Recent projects list (`src/components/Header.tsx`) excludes projects titled "untitled" and also avoids adding them to localStorage.
-- Rationale: keep transient placeholders out of navigation and lists until renamed.
+- Canvas container refactor — NEW
 
-## Code Refactoring - Canvas Utils Extraction ✅ COMPLETED
+- Introduced `src/components/CanvasBoardContainer.tsx` to wrap the board without `Card` padding (`p-0`) and remove extra top/bottom space. Replaced `Card/CardContent` wrappers in `src/app/projects/[id]/page.tsx` and `src/app/create/page.tsx` with this container.
 
-### Goal
+### Schema
 
-Extract the largest utility functions from `CanvasBoard.tsx` to improve code organization and maintainability by creating a separate `canvasUtils.ts` file.
+- Added `Project.screenshotUrl?: string` to persist a thumbnail for each project.
 
-### What Was Extracted
+### API
 
-Successfully moved the following functions to `src/components/canvasUtils.ts`:
+- `PATCH /api/projects/[id]` accepts `{ data?, name?, screenshotUrl? }` and only updates fields that are explicitly provided.
+  - Prevents unintentionally nulling `data` during screenshot-only updates.
+- Cloudinary signing route now allows `overwrite`/`invalidate` parameters for idempotent uploads.
 
-1. **`boardReducer`** (~210 lines) - The main state reducer for canvas operations
-2. **`getCanvasScreenshotAsync`** (~40 lines) - Async screenshot generation with image layer support
-3. **`getCanvasScreenshot`** (~35 lines) - Sync screenshot generation for vector layers only
-4. **`drawPathOnContext`** (~20 lines) - Pure utility for drawing paths on canvas context
-5. **`generateLayerId`**, **`createLayer`**, **`ensureActiveLayerId`** - Small utility functions
+### Client Behavior
 
-### Benefits Achieved
+- `ProjectCanvas` parses saved canvas `layers` and, every 5 minutes (and shortly after mount), captures a composite screenshot using `getCanvasScreenshotAsync(layers, width, height, 1)`, uploads it to Cloudinary under a stable `public_id` of `projects/<id>/thumbnail` with `overwrite` enabled, and PATCHes the resulting `secure_url` to the project.
+- Uses unsigned uploads when `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` is set; falls back to signed uploads via `/api/cloudinary/sign` otherwise.
 
-- **Reduced CanvasBoard.tsx size**: Removed ~300+ lines of utility code
-- **Better separation of concerns**: Pure functions separated from React component logic
-- **Improved maintainability**: Utility functions now have dedicated, testable module
-- **Enhanced reusability**: Canvas utilities can be imported by other components if needed
+### UI
 
-### Technical Details
+- `Projects` page shows a project thumbnail at the top of each card when `screenshotUrl` is present, using an `aspect-video` container with `object-cover`.
+- Thumbnails append a cache-busting query param based on `updatedAt` (`?t=<ms>`), ensuring fresh images after periodic capture or generation.
+- Added remote image domains for Cloudinary in `next.config.ts`.
 
-- All extracted functions are pure utilities with minimal dependencies
-- Proper TypeScript types maintained throughout the extraction
-- Updated test file (`CanvasBoard.reducer.test.ts`) to import from new location
-- Zero breaking changes - all functionality preserved
-- TypeScript compilation passes successfully
+### Scrolling Behavior — FIXED
 
-### File Structure
+- The `Projects` page now properly supports vertical scrolling within the content area.
+- Key changes made:
+  - **AppShell**:
+    - Changed from `min-h-dvh` to `h-dvh` for exact viewport height
+    - Added `overflow-hidden` to the wrapper div to contain child scrolling
+    - Maintains `min-h-0` on main element for proper flex calculations
+  - **Projects Page**:
+    - Added `min-h-0` to both the outer flex container and scrollable div
+    - Header section uses `flex-shrink-0` to maintain fixed height
+    - Projects grid container uses `flex-1 min-h-0 overflow-y-auto` for proper scrolling
+    - Link components have `block h-full` class to maintain proper height flow
+    - Cards have `h-full` to fill their grid cells properly
+    - Added `pb-8` to the grid to prevent bottom clipping
+- Result: The page header remains fixed while the projects grid scrolls independently with proper height constraints throughout the component tree.
 
-```
-src/components/
-├── CanvasBoard.tsx        # React component with DOM/UI logic
-├── canvasUtils.ts         # Pure utility functions
-├── CanvasBoardControls.tsx
-└── CanvasBoard.reducer.test.ts  # Updated to use canvasUtils
-```
+### Notes
 
-This refactoring maintains full backward compatibility while significantly improving code organization and making the codebase more maintainable.
+- DPR is forced to 1 for consistent screenshot sizing across devices.
+- Uploads overwrite previous thumbnails to keep URLs stable per project.
+
+## Security Hardening — NEW
+
+- Auth cookie now sets `secure` in production and remains `httpOnly` with `sameSite: "lax"`.
+- `/api/cloudinary/sign` now requires a valid auth cookie (JWT verified server-side) before signing params.
+- `/api/nano-banana` now requires auth and applies in-memory rate limiting.
+- Rate limiting added:
+  - Login: 5 requests/min per IP returns 429 when exceeded.
+  - Nano-banana: 10 requests/min per IP returns 429 when exceeded.
+- Env requirements:
+  - `AUTH_SECRET` must be set for JWT signing/verification.
+  - `FAL_KEY` must be set for AI image generation.
+  - `CLOUDINARY_URL` must be set for signed uploads (fallback when no unsigned preset).
+- Notes:
+  - Middleware already blocks unauthenticated access globally except whitelisted routes; per-route auth checks provide defense-in-depth.
+  - Rate limiting is in-memory and best-effort; consider a distributed limiter (e.g., Upstash) for production scale.

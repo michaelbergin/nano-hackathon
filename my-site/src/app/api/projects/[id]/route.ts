@@ -45,21 +45,35 @@ export async function PATCH(
     const obj = (body && typeof body === "object" ? body : {}) as {
       data?: unknown;
       name?: unknown;
+      screenshotUrl?: unknown;
     };
+    const hasDataField = Object.prototype.hasOwnProperty.call(obj, "data");
     const data = typeof obj.data === "string" ? obj.data : null;
     const nameRaw = typeof obj.name === "string" ? obj.name : null;
     const name = nameRaw ? nameRaw.trim() : null;
+    const screenshotUrl =
+      typeof obj.screenshotUrl === "string" ? obj.screenshotUrl.trim() : null;
 
     // Update project (ensure user owns the project)
+    const updateFields: Record<string, unknown> = {
+      ...(name !== null ? { name } : {}),
+      ...(screenshotUrl !== null ? { screenshotUrl } : {}),
+    };
+    // Only update `data` if it was explicitly provided by the caller
+    if (hasDataField) {
+      updateFields.data = data;
+    }
+    // Ensure updatedAt changes when any field is being updated via updateMany
+    if (Object.keys(updateFields).length > 0) {
+      updateFields.updatedAt = new Date();
+    }
+
     const project = await prisma.project.updateMany({
       where: {
         id: projectId,
         userId: payload.userId,
       },
-      data: {
-        data,
-        ...(name !== null ? { name } : {}),
-      },
+      data: updateFields,
     });
 
     if (project.count === 0) {
