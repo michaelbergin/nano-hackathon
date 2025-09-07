@@ -67,7 +67,10 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
             lastOpenedAt: number;
           }>)
         : [];
-      return Array.isArray(list) ? list : [];
+      const sanitized = Array.isArray(list) ? list : [];
+      return sanitized.filter(
+        (p) => (p.name ?? "").trim().toLowerCase() !== "untitled"
+      );
     } catch {
       return [];
     }
@@ -111,11 +114,15 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
   // When viewing a project, add/update it in recents with latest timestamp
   useEffect((): void => {
     if (!projectId || !projectName) return;
+    const trimmed = (projectName ?? "").trim();
+    if (trimmed.toLowerCase() === "untitled") {
+      return;
+    }
     const now = Date.now();
     const current = loadRecents();
     const without = current.filter((p) => p.id !== projectId);
     const updated = [
-      { id: projectId, name: projectName, lastOpenedAt: now },
+      { id: projectId, name: trimmed, lastOpenedAt: now },
       ...without,
     ]
       .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)

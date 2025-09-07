@@ -310,6 +310,12 @@ Acceptance:
 - Links: `New Project` (`/new`), `Create` (`/create?id=...`), `Projects` (`/projects`).
 - Header brand area includes a quick-create icon for fast entry to a new canvas.
 
+### Visibility Rule — Projects named "untitled"
+
+- The projects index page (`src/app/projects/page.tsx`) filters out any projects whose name (case-insensitive) equals "untitled".
+- The header's Recent projects list (`src/components/Header.tsx`) excludes projects titled "untitled" and also avoids adding them to localStorage.
+- Rationale: keep transient placeholders out of navigation and lists until renamed.
+
 ## Code Refactoring - Canvas Utils Extraction ✅ COMPLETED
 
 ### Goal
