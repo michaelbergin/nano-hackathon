@@ -106,13 +106,21 @@ function CollapsibleCardHeader({
   onToggle,
 }: CollapsibleCardHeaderProps): JSX.Element {
   return (
-    <CardHeader className={`pb-3 ${isCollapsed ? "px-3 py-2" : ""}`}>
+    <CardHeader
+      className={`pb-3 ${
+        isCollapsed ? "px-2 py-3 h-10 flex items-center justify-center" : ""
+      }`}
+    >
       <CardTitle
-        className={`flex items-center justify-between ${
-          isCollapsed ? "text-sm" : "text-base"
+        className={`flex items-center justify-between w-full ${
+          isCollapsed ? "text-sm h-full" : "text-base"
         }`}
       >
-        <div className="flex items-center gap-2">
+        <div
+          className={`flex items-center ${
+            isCollapsed ? "justify-center gap-0" : "gap-3"
+          }`}
+        >
           {icon}
           {!isCollapsed && <span>{title}</span>}
         </div>
@@ -120,7 +128,7 @@ function CollapsibleCardHeader({
           variant="ghost"
           size="sm"
           onClick={() => onToggle(panel)}
-          className={`p-0 hover:bg-muted ${
+          className={`p-0 hover:bg-muted flex items-center justify-center ${
             isCollapsed ? "h-5 w-5" : "h-6 w-6"
           }`}
           title={isCollapsed ? `Expand ${title}` : `Collapse ${title}`}
@@ -176,6 +184,7 @@ function CanvasBoardControlsBase({
         <div className="pointer-events-auto flex flex-col gap-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
           {/* Tools Card */}
           <Card
+            collapsed={state.panelsCollapsed.tools}
             className={`shadow-lg transition-all duration-200 ${
               state.panelsCollapsed.tools ? "w-16" : "w-80"
             }`}
@@ -266,6 +275,7 @@ function CanvasBoardControlsBase({
 
           {/* Actions Card */}
           <Card
+            collapsed={state.panelsCollapsed.actions}
             className={`shadow-lg transition-all duration-200 ${
               state.panelsCollapsed.actions ? "w-16" : "w-80"
             }`}
@@ -344,6 +354,7 @@ function CanvasBoardControlsBase({
           {/* Preview Card */}
           {state.compositeDataUrl && (
             <Card
+              collapsed={state.panelsCollapsed.actions}
               className={`shadow-lg transition-all duration-200 ${
                 state.panelsCollapsed.actions ? "w-16" : "w-80"
               }`}
@@ -374,6 +385,7 @@ function CanvasBoardControlsBase({
       <div className="pointer-events-none absolute top-4 right-4 z-10">
         <div className="pointer-events-auto">
           <Card
+            collapsed={state.panelsCollapsed.layers}
             className={`shadow-lg transition-all duration-200 ${
               state.panelsCollapsed.layers ? "w-16" : "w-80"
             }`}
@@ -435,6 +447,7 @@ function CanvasBoardControlsBase({
       <div className="pointer-events-none absolute bottom-4 right-4 z-10">
         <div className="pointer-events-auto">
           <Card
+            collapsed={state.panelsCollapsed.banana}
             className={`shadow-lg transition-all duration-200 ${
               state.panelsCollapsed.banana ? "w-16" : "w-80"
             }`}
