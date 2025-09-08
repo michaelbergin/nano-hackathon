@@ -7,7 +7,13 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 export default function LoginForm(): JSX.Element {
   const router = useRouter();
@@ -60,7 +66,7 @@ export default function LoginForm(): JSX.Element {
                 autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="michaelbergin@higharc.com"
+                placeholder="your@email.com"
                 required
                 disabled={loading}
               />
@@ -98,11 +104,7 @@ export default function LoginForm(): JSX.Element {
               </div>
             </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={loading}
-            >
+            <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {loading ? "Signing in..." : "Sign in"}
             </Button>
