@@ -2,9 +2,10 @@
 
 import type { JSX, ChangeEvent, RefObject } from "react";
 import { memo } from "react";
-import { createPortal } from "react-dom";
 import type { BoardMode, Layer } from "./CanvasBoard";
 import LayerControls from "./LayerControls";
+import { GenerateControls } from "./GenerateControls";
+import { LoadingAnimation } from "./LoadingAnimation";
 import {
   Pencil,
   Eraser,
@@ -12,14 +13,12 @@ import {
   RotateCcw,
   RotateCw,
   Camera,
-  Banana,
   Settings,
   Move as MoveIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { ChevronDown } from "lucide-react";
 
@@ -144,106 +143,8 @@ function CanvasBoardControlsBase({
 
   return (
     <>
-      {/* Banana Generation Loading Overlay */}
-      {state.isGenerating &&
-        typeof window !== "undefined" &&
-        createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm pointer-events-auto">
-            <div className="relative w-[320px] h-[320px]">
-              {/* Inner ring spinning clockwise */}
-              {Array.from({ length: 12 }).map((_, index) => {
-                const angle = (index / 12) * 2 * Math.PI;
-                const radius = 80;
-                const x = Math.cos(angle) * radius;
-                const y = Math.sin(angle) * radius;
-                const delay = index * 0.1;
-
-                return (
-                  <div
-                    key={`inner-${index}`}
-                    className="absolute w-8 h-8 flex items-center justify-center"
-                    style={{
-                      left: `calc(50% + ${x}px)`,
-                      top: `calc(50% + ${y}px)`,
-                      transform: "translate(-50%, -50%)",
-                    }}
-                  >
-                    <div
-                      className="animate-spin"
-                      style={{
-                        animationDelay: `${delay}s`,
-                        animationDuration: "2s",
-                        animationTimingFunction: "ease-in-out",
-                        animationIterationCount: "infinite",
-                      }}
-                    >
-                      <Banana
-                        className="w-6 h-6 text-yellow-400 drop-shadow-lg"
-                        style={{
-                          filter: "drop-shadow(0 0 4px rgba(255, 255, 0, 0.6))",
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Outer ring spinning counter-clockwise */}
-              {Array.from({ length: 16 }).map((_, index) => {
-                const angle = (index / 16) * 2 * Math.PI;
-                const radius = 120;
-                const x = Math.cos(angle) * radius;
-                const y = Math.sin(angle) * radius;
-                const delay = index * 0.08;
-
-                return (
-                  <div
-                    key={`outer-${index}`}
-                    className="absolute w-7 h-7 flex items-center justify-center"
-                    style={{
-                      left: `calc(50% + ${x}px)`,
-                      top: `calc(50% + ${y}px)`,
-                      transform: "translate(-50%, -50%)",
-                    }}
-                  >
-                    <div
-                      className="animate-spin"
-                      style={{
-                        animationDelay: `${delay}s`,
-                        animationDuration: "1.6s",
-                        animationTimingFunction: "ease-in-out",
-                        animationIterationCount: "infinite",
-                        animationDirection: "reverse",
-                      }}
-                    >
-                      <Banana
-                        className="w-5 h-5 text-yellow-300 drop-shadow"
-                        style={{
-                          filter: "drop-shadow(0 0 3px rgba(255, 255, 0, 0.6))",
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Center pulsing banana */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="animate-pulse">
-                  <Banana
-                    className="w-12 h-12 text-yellow-300 drop-shadow-2xl"
-                    style={{
-                      filter: "drop-shadow(0 0 8px rgba(255, 255, 0, 0.8))",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Loading text removed by request */}
-            </div>
-          </div>,
-          document.body
-        )}
+      {/* Banana Generation Loading Animation */}
+      <LoadingAnimation isGenerating={state.isGenerating} />
 
       {/* Left column: Tools, Actions, Preview */}
       <div className="pointer-events-none absolute top-4 left-4 z-10">
@@ -446,53 +347,15 @@ function CanvasBoardControlsBase({
         </div>
       </div>
 
-      {/* Banana AI card at bottom right */}
-      <div className="pointer-events-none absolute bottom-4 right-4 z-10">
-        <div className="pointer-events-auto">
-          <Card
-            collapsed={state.panelsCollapsed.banana}
-            className={`shadow-lg transition-all duration-200 ${
-              state.panelsCollapsed.banana ? "w-16" : "w-80"
-            }`}
-          >
-            <CollapsibleCardHeader
-              title="Banana AI"
-              icon={<Banana className="h-4 w-4" />}
-              panel="banana"
-              isCollapsed={state.panelsCollapsed.banana}
-              onToggle={actions.togglePanelCollapsed}
-            />
-            {!state.panelsCollapsed.banana && (
-              <CardContent className="space-y-1">
-                <Button
-                  onClick={actions.generateBanana}
-                  disabled={state.isGenerating}
-                  className="w-full bg-yellow-500 hover:bg-yellow-600 text-yellow-950"
-                >
-                  <Banana className="h-4 w-4 mr-2" />
-                  {state.isGenerating ? "Generating…" : "Generate Banana Layer"}
-                </Button>
-
-                <div className="space-y-1">
-                  <Label htmlFor="bananaPrompt" className="text-sm font-medium">
-                    Prompt
-                  </Label>
-                  <Textarea
-                    id="bananaPrompt"
-                    placeholder="banana-fy this image"
-                    value={state.bananaPrompt}
-                    onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
-                      actions.setBananaPrompt(e.target.value)
-                    }
-                    className="text-sm resize-none"
-                    rows={2}
-                  />
-                </div>
-              </CardContent>
-            )}
-          </Card>
-        </div>
-      </div>
+      {/* Banana AI Generation Controls */}
+      <GenerateControls
+        isGenerating={state.isGenerating}
+        bananaPrompt={state.bananaPrompt}
+        isCollapsed={state.panelsCollapsed.banana}
+        onGenerateBanana={actions.generateBanana}
+        onSetBananaPrompt={actions.setBananaPrompt}
+        onToggleCollapsed={() => actions.togglePanelCollapsed("banana")}
+      />
     </>
   );
 }

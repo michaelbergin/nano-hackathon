@@ -104,6 +104,21 @@ export type BoardAction =
   | { type: "UNDO" }
   | { type: "REDO" };
 
+function getCoalescedEventsSafe(evt: PointerEvent): PointerEvent[] {
+  const candidate = evt as unknown as {
+    getCoalescedEvents?: () => PointerEvent[];
+  };
+  if (typeof candidate.getCoalescedEvents === "function") {
+    try {
+      const events = candidate.getCoalescedEvents();
+      return Array.isArray(events) ? events : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 /**
  * Props for CanvasBoard.
  * onScreenshot: optional callback invoked with a PNG data URL whenever a screenshot is explicitly captured
@@ -832,8 +847,7 @@ export function CanvasBoard({
         return;
       }
 
-      // Prefer coalesced events for smoother Apple Pencil input when available
-      const coalesced = evt.getCoalescedEvents();
+      const coalesced = getCoalescedEventsSafe(evt);
       const prev = curr.points;
       const pushIfFar = (x: number, y: number): void => {
         const n = prev.length;
@@ -1177,6 +1191,8 @@ export function CanvasBoard({
           imageSrc: json.image,
           banana: true,
         });
+        // Add a new blank layer on top after banana generation
+        dispatch({ type: "ADD_LAYER" });
       }
     } catch {
       // ignore

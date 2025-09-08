@@ -184,7 +184,7 @@ function LayerControlsBase({
 
   return (
     <Card
-      className={`shadow-lg border bg-background/95 backdrop-blur-sm transition-all duration-200 ease-in-out overflow-hidden ${
+      className={`shadow-lg border bg-background/95 backdrop-blur-sm transition-all duration-200 ease-in-out overflow-hidden select-text ${
         isCollapsed ? "w-16" : "w-80"
       } ${!isCollapsed ? "max-h-[60vh] flex flex-col" : ""}`}
     >
@@ -330,7 +330,7 @@ function SortableLayerRow({
           {"banana" in layer && layer.banana && (
             <Banana className="h-3 w-3 text-yellow-500 flex-shrink-0" />
           )}
-          <span className="truncate text-xs font-medium text-foreground/90">
+          <span className="truncate text-xs font-medium text-foreground/90 select-text">
             {layer.name}
           </span>
         </div>

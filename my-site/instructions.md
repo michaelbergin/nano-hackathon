@@ -414,3 +414,61 @@ Acceptance:
 - Notes:
   - Middleware already blocks unauthenticated access globally except whitelisted routes; per-route auth checks provide defense-in-depth.
   - Rate limiting is in-memory and best-effort; consider a distributed limiter (e.g., Upstash) for production scale.
+
+## Prompt Shortcuts — NEW
+
+Kid-friendly prompt shortcuts were added to `src/components/GenerateControls.tsx` to help ages 4–10 enhance sketches quickly. Each shortcut sets the prompt field; users can tweak and then press Generate.
+
+Shortcuts:
+
+- Magic Colors (Sparkles): make the drawing pop with bright, bold colors and gentle glow, keep shapes clear for kids
+- Clean Lines (Paintbrush): neaten sketch lines, smooth edges, cartoon style, keep original idea and layout
+- Sparkly Stars (Stars): add cute sparkly stars and soft shine around the main subject
+- Rainbow (Rainbow): add a cheerful rainbow and soft clouds in the background
+- Sunny Day (Sun): bright blue sky, puffy clouds, warm sunshine, happy colors
+- Night Sky (Moon): cozy night sky with gentle moon and friendly twinkling stars
+- Flower Garden (Flower): add colorful flowers and soft grass, friendly storybook style
+- Castle (Castle): add a cute fairytale castle in the distance, bright and simple
+- Rocket Ship (Rocket): add a playful rocket ship and stars, fun space adventure vibe
+- Animal Friends (Dog): add friendly animal friends (puppy, kitten, bunny) smiling, simple cartoon style
+- Undersea (Fish): make a cheerful undersea scene with fish and bubbles, bright colors
+- Clouds (Cloud): add soft fluffy clouds around, gentle storybook look
+- Magic Sparkles (Wand2): sprinkle magic sparkles and gentle glow around the drawing
+- Cute Bugs (Bug): add tiny cute bugs (ladybugs, butterflies) with friendly faces
+- Kitty (Cat): add a cute kitty with big eyes, soft fur, friendly smile
+- Banana Fun (Banana): banana-fy this image with banana characters and fun yellow themes
+
+UI:
+
+- Layout order: Shortcuts → Prompt input → Transform button
+- Main button now shows "Transform" with Wand2 icon (instead of "Generate Banana Layer" with Banana icon).
+- Shortcuts render as outline buttons in a 2-column grid at the top.
+- Prompt input is positioned between shortcuts and the transform button.
+- Clicking a shortcut replaces the prompt value; disabled during generation.
+- All prompts are bright, safe, and friendly; avoid realistic/scary styles.
+
+## Microphone Voice Input — NEW
+
+Added on-device microphone input to `src/components/GenerateControls.tsx` using the browser Web Speech API (when available):
+
+- Behavior:
+
+  - A mic button appears inside the prompt input (top-right).
+  - Clicking it starts speech recognition; clicking again stops.
+  - Final transcripts are appended to the current prompt value.
+  - Button shows a pulsing red state while recording.
+
+- Implementation:
+
+  - Uses `window.SpeechRecognition || window.webkitSpeechRecognition` with runtime guards.
+  - Minimal TypeScript interfaces are defined locally to avoid non-standard DOM types.
+  - `interimResults` enabled; only final results are appended to the prompt.
+  - Proper cleanup: recognition is aborted on unmount or error/end.
+
+- Limitations:
+
+  - Not supported in all browsers (notably some desktop Firefox builds). When unsupported, we log a warning. Consider adding a toast in the future.
+
+- Accessibility:
+  - `title` toggles between Start/Stop
+  - `aria-pressed` reflects recording state

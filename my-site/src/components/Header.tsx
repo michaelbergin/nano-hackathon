@@ -302,14 +302,15 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
           <span className="sm:hidden">Banananano</span>
         </div>
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
           aria-label="Create new project"
           title="Create new project"
-          className="ml-1 sm:ml-2 transition-all duration-300 ease-in-out hover:bg-primary/10 hover:text-primary hover:scale-110 hover:shadow-md focus:ring-2 focus:ring-primary/20 focus:ring-offset-1 active:scale-95 border border-transparent hover:border-primary/20 rounded-md"
+          className="ml-1 sm:ml-2 transition-all duration-300 ease-in-out hover:bg-primary/10 hover:text-primary hover:scale-110 hover:shadow-md focus:ring-2 focus:ring-primary/20 focus:ring-offset-1 active:scale-95 rounded-md"
           onClick={handleCreateUntitled}
         >
-          <Plus className="h-4 w-4 transition-transform duration-300 ease-in-out" />
+          <Plus className="h-4 w-4 transition-transform duration-300 ease-in-out mr-2" />
+          New
         </Button>
       </div>
 
