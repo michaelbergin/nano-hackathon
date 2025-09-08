@@ -447,28 +447,36 @@ UI:
 - Clicking a shortcut replaces the prompt value; disabled during generation.
 - All prompts are bright, safe, and friendly; avoid realistic/scary styles.
 
-## Microphone Voice Input — NEW
+## Card Header Styling Alignment — NEW
 
-Added on-device microphone input to `src/components/GenerateControls.tsx` using the browser Web Speech API (when available):
+Unified the styling for collapsible card headers across three control components for consistent UX:
 
-- Behavior:
+### Components Updated
 
-  - A mic button appears inside the prompt input (top-right).
-  - Clicking it starts speech recognition; clicking again stops.
-  - Final transcripts are appended to the current prompt value.
-  - Button shows a pulsing red state while recording.
+- `CanvasBoardControls.tsx` (Tools, Actions cards)
+- `LayerControls.tsx` (Layers card)
+- `GenerateControls.tsx` (Banana AI card)
 
-- Implementation:
+### Design Specifications
 
-  - Uses `window.SpeechRecognition || window.webkitSpeechRecognition` with runtime guards.
-  - Minimal TypeScript interfaces are defined locally to avoid non-standard DOM types.
-  - `interimResults` enabled; only final results are appended to the prompt.
-  - Proper cleanup: recognition is aborted on unmount or error/end.
+#### Collapsed State
 
-- Limitations:
+- **Format**: Square 16x16 (w-16 h-16) for uniform icon display
+- **Icon**: Centered within the square with no additional text
+- **Interaction**: Entire card becomes clickable to expand
+- **Cursor**: Shows pointer cursor to indicate interactivity
 
-  - Not supported in all browsers (notably some desktop Firefox builds). When unsupported, we log a warning. Consider adding a toast in the future.
+#### Expanded State
 
-- Accessibility:
-  - `title` toggles between Start/Stop
-  - `aria-pressed` reflects recording state
+- **Padding**: Consistent px-4 py-3 for all headers
+- **Icon Spacing**: gap-2 between icon and title text
+- **Icon Container**: Uses flex-shrink-0 wrapper for consistent sizing
+- **Toggle Button**: Standardized to h-7 w-7 size across all components
+- **Hover States**: Subtle muted/80 background on hover for all buttons
+
+### Implementation Details
+
+- Cards use conditional onClick handlers (only when collapsed)
+- Toggle buttons only appear when expanded (cleaner collapsed state)
+- All transitions use duration-200 for smooth animations
+- Icons maintain consistent sizing through flex-shrink-0 containers

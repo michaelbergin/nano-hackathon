@@ -92,38 +92,36 @@ function CollapsibleCardHeader({
 }: CollapsibleCardHeaderProps): JSX.Element {
   return (
     <CardHeader
-      className={`pb-3 ${
-        isCollapsed ? "px-2 py-3 h-10 flex items-center justify-center" : ""
+      className={`${
+        isCollapsed
+          ? "p-0 h-16 w-16 flex items-center justify-center"
+          : "px-4 py-3"
       }`}
     >
       <CardTitle
         className={`flex items-center justify-between w-full ${
-          isCollapsed ? "text-sm h-full" : "text-base"
+          isCollapsed ? "text-sm" : "text-base"
         }`}
       >
         <div
           className={`flex items-center ${
-            isCollapsed ? "justify-center gap-0" : "gap-3"
+            isCollapsed ? "justify-center" : "gap-2"
           }`}
         >
-          {icon}
+          <div className="flex-shrink-0">{icon}</div>
           {!isCollapsed && <span>{title}</span>}
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onToggle(panel)}
-          className={`p-0 hover:bg-muted flex items-center justify-center ${
-            isCollapsed ? "h-5 w-5" : "h-6 w-6"
-          }`}
-          title={isCollapsed ? `Expand ${title}` : `Collapse ${title}`}
-        >
-          <ChevronDown
-            className={`transition-transform duration-200 ${
-              isCollapsed ? "-rotate-90 h-3 w-3" : "h-4 w-4"
-            }`}
-          />
-        </Button>
+        {!isCollapsed && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onToggle(panel)}
+            className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors flex items-center justify-center"
+            title={`Collapse ${title}`}
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        )}
       </CardTitle>
     </CardHeader>
   );
@@ -151,10 +149,14 @@ function CanvasBoardControlsBase({
         <div className="pointer-events-auto flex flex-col gap-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
           {/* Tools Card */}
           <Card
-            collapsed={state.panelsCollapsed.tools}
             className={`shadow-lg transition-all duration-200 ${
-              state.panelsCollapsed.tools ? "w-16" : "w-80"
+              state.panelsCollapsed.tools ? "w-16 h-16 cursor-pointer" : "w-80"
             }`}
+            onClick={
+              state.panelsCollapsed.tools
+                ? () => actions.togglePanelCollapsed("tools")
+                : undefined
+            }
           >
             <CollapsibleCardHeader
               title="Tools"
@@ -266,10 +268,16 @@ function CanvasBoardControlsBase({
 
           {/* Actions Card */}
           <Card
-            collapsed={state.panelsCollapsed.actions}
             className={`shadow-lg transition-all duration-200 ${
-              state.panelsCollapsed.actions ? "w-16" : "w-80"
+              state.panelsCollapsed.actions
+                ? "w-16 h-16 cursor-pointer"
+                : "w-80"
             }`}
+            onClick={
+              state.panelsCollapsed.actions
+                ? () => actions.togglePanelCollapsed("actions")
+                : undefined
+            }
           >
             <CollapsibleCardHeader
               title="Actions"
@@ -298,10 +306,16 @@ function CanvasBoardControlsBase({
           {/* Preview Card */}
           {state.compositeDataUrl && (
             <Card
-              collapsed={state.panelsCollapsed.actions}
               className={`shadow-lg transition-all duration-200 ${
-                state.panelsCollapsed.actions ? "w-16" : "w-80"
+                state.panelsCollapsed.actions
+                  ? "w-16 h-16 cursor-pointer"
+                  : "w-80"
               }`}
+              onClick={
+                state.panelsCollapsed.actions
+                  ? () => actions.togglePanelCollapsed("actions")
+                  : undefined
+              }
             >
               <CollapsibleCardHeader
                 title="Preview"

@@ -63,18 +63,20 @@ function CollapsibleCardHeader({
 }: CollapsibleCardHeaderProps): JSX.Element {
   return (
     <CardHeader
-      className={`pb-2 px-3 ${
-        isCollapsed ? "py-2 h-10 flex items-center justify-center" : "py-3"
+      className={`${
+        isCollapsed
+          ? "p-0 h-16 w-16 flex items-center justify-center"
+          : "px-4 py-3"
       }`}
     >
       <CardTitle
         className={`flex items-center justify-between w-full ${
-          isCollapsed ? "text-xs h-full" : "text-sm font-medium"
+          isCollapsed ? "text-sm" : "text-sm font-medium"
         }`}
       >
         <div
           className={`flex items-center min-w-0 flex-1 ${
-            isCollapsed ? "justify-center gap-0" : "gap-2"
+            isCollapsed ? "justify-center" : "gap-2"
           }`}
         >
           <div className="flex-shrink-0">{icon}</div>
@@ -82,45 +84,41 @@ function CollapsibleCardHeader({
             <span className="truncate text-foreground/90">{title}</span>
           )}
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {!isCollapsed && onDownload && (
+        {!isCollapsed && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {onDownload && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void onDownload()}
+                className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors"
+                title="Download"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {onUpload && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onUpload}
+                className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors"
+                title="Upload Image"
+              >
+                <Upload className="h-3.5 w-3.5" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => void onDownload()}
-              className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors"
-              title="Download"
+              onClick={onToggle}
+              className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors flex items-center justify-center"
+              title={`Collapse ${title}`}
             >
-              <Download className="h-3.5 w-3.5" />
+              <ChevronDown className="h-4 w-4" />
             </Button>
-          )}
-          {!isCollapsed && onUpload && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onUpload}
-              className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors"
-              title="Upload Image"
-            >
-              <Upload className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onToggle}
-            className={`p-0 hover:bg-muted/80 transition-colors flex items-center justify-center ${
-              isCollapsed ? "h-6 w-6" : "h-7 w-7"
-            }`}
-            title={isCollapsed ? `Expand ${title}` : `Collapse ${title}`}
-          >
-            <ChevronDown
-              className={`transition-transform duration-300 ease-in-out ${
-                isCollapsed ? "-rotate-90 h-3.5 w-3.5" : "h-4 w-4"
-              }`}
-            />
-          </Button>
-        </div>
+          </div>
+        )}
       </CardTitle>
     </CardHeader>
   );
@@ -185,12 +183,13 @@ function LayerControlsBase({
   return (
     <Card
       className={`shadow-lg border bg-background/95 backdrop-blur-sm transition-all duration-200 ease-in-out overflow-hidden select-text ${
-        isCollapsed ? "w-16" : "w-80"
+        isCollapsed ? "w-16 h-16 cursor-pointer" : "w-80"
       } ${!isCollapsed ? "max-h-[60vh] flex flex-col" : ""}`}
+      onClick={isCollapsed ? onToggleCollapsed : undefined}
     >
       <CollapsibleCardHeader
         title="Layers"
-        icon={<Layers className="h-4 w-4 text-muted-foreground" />}
+        icon={<Layers className="h-4 w-4" />}
         isCollapsed={isCollapsed}
         onToggle={onToggleCollapsed}
         onDownload={onDownload}
@@ -198,7 +197,7 @@ function LayerControlsBase({
         fileInputRef={fileInputRef}
       />
       {!isCollapsed && (
-        <CardContent className="px-3 pb-3 pt-0 gap-2 flex-1 min-h-0 flex flex-col">
+        <CardContent className="px-4 pb-3 pt-0 gap-2 flex-1 min-h-0 flex flex-col">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}

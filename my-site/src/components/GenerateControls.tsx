@@ -6,20 +6,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Banana, Wand2 } from "lucide-react";
+import { Banana, Wand2, ChevronDown } from "lucide-react";
 import {
   Sparkles,
   Paintbrush,
-  Stars,
   Rocket,
-  Flower,
   Cloud,
   Rainbow,
   Sun,
   Moon,
-  Castle,
   Bug,
-  Cat,
   Dog,
   Fish,
   Mic,
@@ -42,40 +38,36 @@ function CollapsibleCardHeader({
 }: CollapsibleCardHeaderProps): JSX.Element {
   return (
     <div
-      className={`pb-3 ${
-        isCollapsed ? "px-2 py-3 h-10 flex items-center justify-center" : ""
+      className={`${
+        isCollapsed
+          ? "p-0 h-16 w-16 flex items-center justify-center"
+          : "px-4 py-3"
       }`}
     >
       <div
         className={`flex items-center justify-between w-full ${
-          isCollapsed ? "text-sm h-full" : "text-base"
+          isCollapsed ? "text-sm" : "text-base"
         }`}
       >
         <div
           className={`flex items-center ${
-            isCollapsed ? "justify-center gap-0" : "gap-3"
+            isCollapsed ? "justify-center" : "gap-2"
           }`}
         >
-          {icon}
+          <div className="flex-shrink-0">{icon}</div>
           {!isCollapsed && <span>{title}</span>}
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onToggle(panel)}
-          className={`p-0 hover:bg-muted flex items-center justify-center ${
-            isCollapsed ? "h-5 w-5" : "h-6 w-6"
-          }`}
-          title={isCollapsed ? `Expand ${title}` : `Collapse ${title}`}
-        >
-          <div
-            className={`transition-transform duration-200 ${
-              isCollapsed ? "-rotate-90 h-3 w-3" : "h-4 w-4"
-            }`}
+        {!isCollapsed && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onToggle(panel)}
+            className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors flex items-center justify-center"
+            title={`Collapse ${title}`}
           >
-            ▼
-          </div>
-        </Button>
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -127,7 +119,7 @@ export function GenerateControls({
       return null;
     }
     const w = window as unknown as Record<string, unknown>;
-    const Ctor = (w.SpeechRecognition || w.webkitSpeechRecognition) as
+    const Ctor = (w.SpeechRecognition ?? w.webkitSpeechRecognition) as
       | MinimalSpeechRecognitionCtor
       | undefined;
     return Ctor ?? null;
@@ -170,7 +162,6 @@ export function GenerateControls({
     const Ctor = getSpeechRecognitionCtor();
     if (Ctor === null) {
       // Fallback: notify via console; could be enhanced with a toast
-      // eslint-disable-next-line no-console
       console.warn("Speech recognition is not supported in this browser.");
       return;
     }
@@ -184,7 +175,7 @@ export function GenerateControls({
       let finalTranscript = "";
       for (let i = 0; i < event.results.length; i += 1) {
         const result = event.results[i];
-        if (result.isFinal === true) {
+        if (result.isFinal) {
           finalTranscript += result[0].transcript;
         }
       }
@@ -232,17 +223,18 @@ export function GenerateControls({
         prompt:
           "neaten sketch lines, smooth edges, cartoon style, keep original idea and layout",
       },
-      {
-        key: "sparkly-stars",
-        label: "Sparkly Stars",
-        icon: <Stars className="h-4 w-4" />,
-        prompt: "add cute sparkly stars and soft shine around the main subject",
-      },
+      // {
+      //   key: "sparkly-stars",
+      //   label: "Sparkly Stars",
+      //   icon: <Stars className="h-4 w-4" />,
+      //   prompt: "add cute sparkly stars and soft shine around the main subject",
+      // },
       {
         key: "rainbow",
         label: "Rainbow",
         icon: <Rainbow className="h-4 w-4" />,
-        prompt: "add a cheerful rainbow and soft clouds in the background",
+        prompt:
+          "if the sketch is a rainbow shape, enrich the sketch, if not, add a cheerful rainbow and soft clouds in the background of the main object",
       },
       {
         key: "sky-day",
@@ -256,19 +248,19 @@ export function GenerateControls({
         icon: <Moon className="h-4 w-4" />,
         prompt: "cozy night sky with gentle moon and friendly twinkling stars",
       },
-      {
-        key: "garden",
-        label: "Flower Garden",
-        icon: <Flower className="h-4 w-4" />,
-        prompt: "add colorful flowers and soft grass, friendly storybook style",
-      },
-      {
-        key: "castle",
-        label: "Castle",
-        icon: <Castle className="h-4 w-4" />,
-        prompt:
-          "add a cute fairytale castle in the distance, bright and simple",
-      },
+      // {
+      //   key: "garden",
+      //   label: "Flower Garden",
+      //   icon: <Flower className="h-4 w-4" />,
+      //   prompt: "add colorful flowers and soft grass, friendly storybook style",
+      // },
+      // {
+      //   key: "castle",
+      //   label: "Castle",
+      //   icon: <Castle className="h-4 w-4" />,
+      //   prompt:
+      //     "add a cute fairytale castle in the distance, bright and simple",
+      // },
       {
         key: "rocket",
         label: "Rocket Ship",
@@ -308,12 +300,12 @@ export function GenerateControls({
         prompt:
           "add tiny cute bugs (ladybugs, butterflies) with friendly faces",
       },
-      {
-        key: "kitty",
-        label: "Kitty",
-        icon: <Cat className="h-4 w-4" />,
-        prompt: "add a cute kitty with big eyes, soft fur, friendly smile",
-      },
+      // {
+      //   key: "kitty",
+      //   label: "Kitty",
+      //   icon: <Cat className="h-4 w-4" />,
+      //   prompt: "add a cute kitty with big eyes, soft fur, friendly smile",
+      // },
       {
         key: "banana-theme",
         label: "Banana Fun",
@@ -329,8 +321,9 @@ export function GenerateControls({
       <div className="pointer-events-auto select-none">
         <Card
           className={`shadow-lg transition-all duration-200 ${
-            isCollapsed ? "w-16" : "w-80"
+            isCollapsed ? "w-16 h-16 cursor-pointer" : "w-80"
           }`}
+          onClick={isCollapsed ? onToggleCollapsed : undefined}
         >
           <CollapsibleCardHeader
             title="Banana AI"
@@ -340,9 +333,9 @@ export function GenerateControls({
             onToggle={() => onToggleCollapsed()}
           />
           {!isCollapsed && (
-            <CardContent className="space-y-2">
+            <CardContent className="px-4 pb-3 pt-0 space-y-2">
               <div className="space-y-1">
-                <Label className="text-sm font-medium">Shortcuts</Label>
+                {/* <Label className="text-sm font-medium">Shortcuts</Label> */}
                 <div className="grid grid-cols-2 gap-1">
                   {shortcuts.map((s) => (
                     <Button
