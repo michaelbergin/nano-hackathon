@@ -4,7 +4,6 @@ import type {
   PathStroke,
   VectorLayer,
   ImageLayer,
-  Layer,
 } from "./CanvasBoard";
 import { boardReducer, createLayer } from "./canvasUtils";
 
@@ -17,6 +16,8 @@ function initialState(): BoardState {
     strokeColor: "#111827",
     brushSize: 4,
     compositeDataUrl: null,
+    past: [],
+    future: [],
   };
 }
 
@@ -31,7 +32,10 @@ describe("CanvasBoard reducer", () => {
 
   it("selects a layer and ensures it is visible", () => {
     const s1 = initialState();
-    const hidden = { ...s1.layers[0], visible: false } as VectorLayer;
+    const hidden: VectorLayer = {
+      ...(s1.layers[0] as VectorLayer),
+      visible: false,
+    };
     const sHidden: BoardState = { ...s1, layers: [hidden] };
     const s2 = boardReducer(sHidden, { type: "SELECT_LAYER", id: hidden.id });
     expect(s2.activeLayerId).toBe(hidden.id);
@@ -71,9 +75,7 @@ describe("CanvasBoard reducer", () => {
       activeLayerId: image.id,
     };
     const s2 = boardReducer(sWithImage, { type: "ENSURE_ACTIVE_VECTOR_LAYER" });
-    const active = s2.layers.find((l) => l.id === s2.activeLayerId) as
-      | Layer
-      | undefined;
+    const active = s2.layers.find((l) => l.id === s2.activeLayerId);
     expect(active).toBeDefined();
     expect(active && active.type).toBe("vector");
   });

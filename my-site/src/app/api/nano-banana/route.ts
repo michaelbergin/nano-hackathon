@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { runNanoBananaEdit } from "@/lib/fal";
 import { cookies } from "next/headers";
 import { verifyAuthToken } from "@/lib/auth";
+import { createRateLimiter } from "@/lib/rateLimit";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 10;
-
-type Counter = { count: number; resetAt: number };
-const nanoBananaRateLimiters: Map<string, Counter> = new Map();
+const limiter = createRateLimiter({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RATE_LIMIT_MAX_REQUESTS,
+  prefix: "nano-banana",
+});
 
 function getClientIpFromHeaders(headers: Headers): string {
   const xff = headers.get("x-forwarded-for");
@@ -24,17 +27,9 @@ function getClientIpFromHeaders(headers: Headers): string {
   return "unknown";
 }
 
-function isAllowedByRateLimit(key: string): boolean {
-  const now = Date.now();
-  const existing = nanoBananaRateLimiters.get(key);
-  if (existing == null || now >= existing.resetAt) {
-    const fresh: Counter = { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS };
-    nanoBananaRateLimiters.set(key, fresh);
-    return true;
-  }
-  existing.count += 1;
-  nanoBananaRateLimiters.set(key, existing);
-  return existing.count <= RATE_LIMIT_MAX_REQUESTS;
+async function isAllowedByRateLimit(key: string): Promise<boolean> {
+  const result = await limiter.check(key);
+  return result.allowed;
 }
 
 export async function POST(req: Request) {
@@ -56,7 +51,7 @@ export async function POST(req: Request) {
     }
 
     const ip = getClientIpFromHeaders(req.headers);
-    if (!isAllowedByRateLimit(ip)) {
+    if (!(await isAllowedByRateLimit(ip))) {
       return NextResponse.json(
         { ok: false, error: "Too many requests" },
         { status: 429 }

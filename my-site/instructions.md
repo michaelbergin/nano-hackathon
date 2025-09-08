@@ -149,6 +149,17 @@ yarn typecheck
 yarn lint
 ```
 
+## ESLint/TypeScript Fixes — 2025-09-08
+
+- Fixed unnecessary conditional in `src/app/new/page.tsx` by replacing the `mounted` flag with an `AbortController` to avoid always-falsy checks and ensure proper fetch cancellation on unmount.
+- Removed unnecessary type assertion and unused type in `src/components/CanvasBoard.reducer.test.ts`; added missing `past`/`future` fields to `BoardState` test helper to match current type definition.
+- Tightened form utilities in `src/components/ui/form.tsx`:
+  - Made `FormFieldContext` nullable and added an explicit guard to satisfy strict null checks and remove unnecessary conditionals.
+  - Removed optional chaining on known non-null values and simplified error message extraction.
+  - Provided a default `FormItemContext` shape to prevent always-falsy checks.
+- Removed unnecessary optional chaining in `src/lib/rateLimit.ts` when accessing known object shapes from the Upstash pipeline response.
+- Lint now passes with zero errors (`yarn lint`).
+
 All components are now production-ready with best-in-class UX and developer experience.
 
 ## Canvas Layers and Screenshot

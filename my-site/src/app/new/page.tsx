@@ -8,7 +8,7 @@ import { AppShell } from "@/components/AppShell";
 export default function NewProjectPage(): JSX.Element {
   const router = useRouter();
   useEffect(() => {
-    let mounted = true;
+    const controller = new AbortController();
     (async () => {
       try {
         // If a project was just created in this session, reuse it to avoid duplicates
@@ -24,10 +24,8 @@ export default function NewProjectPage(): JSX.Element {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name: "untitled" }),
           credentials: "include",
+          signal: controller.signal,
         });
-        if (!mounted) {
-          return;
-        }
         if (!res.ok) {
           router.push("/projects");
           return;
@@ -44,12 +42,15 @@ export default function NewProjectPage(): JSX.Element {
           // ignore storage errors
         }
         router.replace(`/create?id=${data.project.id}`);
-      } catch {
+      } catch (err: unknown) {
+        if ((err as { name?: string } | null)?.name === "AbortError") {
+          return;
+        }
         router.push("/projects");
       }
     })();
     return () => {
-      mounted = false;
+      controller.abort();
     };
   }, [router]);
 

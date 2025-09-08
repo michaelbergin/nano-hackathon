@@ -49,6 +49,8 @@ You will use this for `DATABASE_URL`.
 - `FAL_KEY` = your fal.ai API key (required for Generate)
 - `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` = your unsigned upload preset (optional; client-side uploads)
 - `CLOUDINARY_URL` = `cloudinary://<API_KEY>:<API_SECRET>@<cloud_name>` (optional; enables signed upload fallback)
+- `UPSTASH_REDIS_REST_URL` = Upstash Redis REST URL (optional; enables global rate limiting)
+- `UPSTASH_REDIS_REST_TOKEN` = Upstash Redis REST token (optional)
 
 Notes:
 
@@ -87,6 +89,7 @@ Default admin (from seed): `michaelbergin@higharc.com` / `nanobanana`.
 - Prisma errors: confirm Neon is reachable and `npx prisma migrate deploy` runs during build.
 - No admin user: re-run the seed locally with `DATABASE_URL` pointing to Neon.
 - Image upload blocked: set either `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` (unsigned) or `CLOUDINARY_URL` (signed fallback).
+- Rate limiting not working across regions: add Upstash env vars above; without them the app falls back to per-instance in-memory limits.
 
 ---
 
