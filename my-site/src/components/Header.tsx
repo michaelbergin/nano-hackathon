@@ -298,8 +298,8 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
       <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
         <Banana className="h-5 w-5 sm:h-6 sm:w-6 text-yellow-500" />
         <div className="font-semibold text-sm sm:text-lg truncate">
-          <span className="hidden sm:inline">Banananano</span>
-          <span className="sm:hidden">Banananano</span>
+          <span className="hidden sm:inline">MonkeyDoodle</span>
+          <span className="sm:hidden">MonkeyDoodle</span>
         </div>
         <Button
           variant="outline"
@@ -316,7 +316,7 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
 
       {/* Centered Project Name */}
       {projectId ? (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-12">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-textpx-12">
           {isEditingName ? (
             <input
               ref={inputRef}

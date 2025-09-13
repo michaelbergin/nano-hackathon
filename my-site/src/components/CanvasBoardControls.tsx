@@ -1,26 +1,16 @@
 "use client";
 
-import type { JSX, ChangeEvent, RefObject } from "react";
+import type { JSX, RefObject } from "react";
 import { memo } from "react";
 import type { BoardMode, Layer } from "./CanvasBoard";
 import LayerControls from "./LayerControls";
 import { GenerateControls } from "./GenerateControls";
 import { LoadingAnimation } from "./LoadingAnimation";
-import {
-  Pencil,
-  Eraser,
-  Palette,
-  RotateCcw,
-  RotateCw,
-  Camera,
-  Settings,
-  Move as MoveIcon,
-} from "lucide-react";
+import { Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ChevronDown } from "lucide-react";
+import ToolControls from "./ToolControls";
 
 export type CanvasControlsState = {
   mode: BoardMode;
@@ -137,137 +127,18 @@ function CanvasBoardControlsBase({
   layersPanelCollapsed,
   onToggleLayersPanel,
 }: CanvasBoardControlsProps): JSX.Element {
-  const drawActive = state.mode === "draw";
+  // Tools UI moved into ToolControls
 
   return (
     <>
       {/* Banana Generation Loading Animation */}
       <LoadingAnimation isGenerating={state.isGenerating} />
 
-      {/* Left column: Tools, Actions, Preview */}
+      {/* Left column: Actions, Preview */}
       <div className="pointer-events-none absolute top-4 left-4 z-10">
         <div className="pointer-events-auto flex flex-col gap-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
-          {/* Tools Card */}
-          <Card
-            className={`shadow-lg transition-all duration-200 ${
-              state.panelsCollapsed.tools ? "w-16 h-16 cursor-pointer" : "w-80"
-            }`}
-            onClick={
-              state.panelsCollapsed.tools
-                ? () => actions.togglePanelCollapsed("tools")
-                : undefined
-            }
-          >
-            <CollapsibleCardHeader
-              title="Tools"
-              icon={<Settings className="h-4 w-4" />}
-              panel="tools"
-              isCollapsed={state.panelsCollapsed.tools}
-              onToggle={actions.togglePanelCollapsed}
-            />
-            {!state.panelsCollapsed.tools && (
-              <CardContent className="space-y-2">
-                {/* Mode Selection */}
-                <div className="grid grid-cols-3 gap-1">
-                  <Button
-                    variant={drawActive ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => actions.setMode("draw")}
-                    className="flex-1"
-                  >
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Draw
-                  </Button>
-                  <Button
-                    variant={state.mode === "erase" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => actions.setMode("erase")}
-                    className="flex-1"
-                  >
-                    <Eraser className="h-4 w-4 mr-2" />
-                    Erase
-                  </Button>
-                  <Button
-                    variant={state.mode === "move" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => actions.setMode("move")}
-                    className="flex-1"
-                  >
-                    <MoveIcon className="h-4 w-4 mr-2" />
-                    Move
-                  </Button>
-                </div>
-
-                {/* Brush Settings */}
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1">
-                    <Palette className="h-4 w-4 text-muted-foreground" />
-                    <Label className="text-sm font-medium">Color</Label>
-                    <Input
-                      type="color"
-                      value={state.strokeColor}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                        actions.setColor(e.target.value)
-                      }
-                      className="h-8 w-12 p-1 border rounded"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <div className="h-4 w-4 rounded-full border-2 border-muted-foreground flex items-center justify-center">
-                      <div
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: state.strokeColor }}
-                      />
-                    </div>
-                    <Label className="text-sm font-medium flex-1">Size</Label>
-                    <div className="flex items-center gap-1 min-w-0">
-                      <Input
-                        type="range"
-                        min={1}
-                        max={24}
-                        value={state.brushSize}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                          actions.setBrushSize(Number(e.target.value))
-                        }
-                        className="flex-1"
-                      />
-                      <span className="text-xs text-muted-foreground w-6 text-right">
-                        {state.brushSize}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Undo/Redo Controls */}
-                <div className="grid grid-cols-2 gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={actions.undo}
-                    disabled={!state.canUndo}
-                    className="text-xs"
-                  >
-                    <RotateCcw className="h-3 w-3 mr-1" />
-                    Undo
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={actions.redo}
-                    disabled={!state.canRedo}
-                    className="text-xs"
-                  >
-                    <RotateCw className="h-3 w-3 mr-1" />
-                    Redo
-                  </Button>
-                </div>
-              </CardContent>
-            )}
-          </Card>
-
           {/* Actions Card */}
-          <Card
+          {/* <Card
             className={`shadow-lg transition-all duration-200 ${
               state.panelsCollapsed.actions
                 ? "w-16 h-16 cursor-pointer"
@@ -301,7 +172,7 @@ function CanvasBoardControlsBase({
                 </div>
               </CardContent>
             )}
-          </Card>
+          </Card> */}
 
           {/* Preview Card */}
           {state.compositeDataUrl && (
@@ -339,9 +210,27 @@ function CanvasBoardControlsBase({
         </div>
       </div>
 
+      {/* Bottom-centered Tool Controls */}
+      <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 z-10 w-full flex justify-center px-4">
+        <div className="pointer-events-auto select-none max-w-full overflow-x-auto">
+          <ToolControls
+            mode={state.mode}
+            strokeColor={state.strokeColor}
+            brushSize={state.brushSize}
+            canUndo={state.canUndo}
+            canRedo={state.canRedo}
+            setMode={actions.setMode}
+            setColor={actions.setColor}
+            setBrushSize={actions.setBrushSize}
+            undo={actions.undo}
+            redo={actions.redo}
+          />
+        </div>
+      </div>
+
       {/* Layers menu at top right */}
       <div className="pointer-events-none absolute top-4 right-4 z-10">
-        <div className="pointer-events-auto overflow-hidden">
+        <div className="pointer-events-auto">
           <LayerControls
             layers={layers}
             activeLayerId={activeLayerId}

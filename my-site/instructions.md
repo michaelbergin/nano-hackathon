@@ -149,17 +149,6 @@ yarn typecheck
 yarn lint
 ```
 
-## ESLint/TypeScript Fixes — 2025-09-08
-
-- Fixed unnecessary conditional in `src/app/new/page.tsx` by replacing the `mounted` flag with an `AbortController` to avoid always-falsy checks and ensure proper fetch cancellation on unmount.
-- Removed unnecessary type assertion and unused type in `src/components/CanvasBoard.reducer.test.ts`; added missing `past`/`future` fields to `BoardState` test helper to match current type definition.
-- Tightened form utilities in `src/components/ui/form.tsx`:
-  - Made `FormFieldContext` nullable and added an explicit guard to satisfy strict null checks and remove unnecessary conditionals.
-  - Removed optional chaining on known non-null values and simplified error message extraction.
-  - Provided a default `FormItemContext` shape to prevent always-falsy checks.
-- Removed unnecessary optional chaining in `src/lib/rateLimit.ts` when accessing known object shapes from the Upstash pipeline response.
-- Lint now passes with zero errors (`yarn lint`).
-
 All components are now production-ready with best-in-class UX and developer experience.
 
 ## Canvas Layers and Screenshot
@@ -235,6 +224,14 @@ All components are now production-ready with best-in-class UX and developer expe
 - Root cause: `resizeCanvas()` was indirectly triggered by brush/color state changes, resizing the canvas element and clearing its pixel buffer.
 - Fix: Decoupled resize from style updates. `resizeCanvas()` now runs only on actual layout/DPR changes. A separate effect updates `ctx.lineWidth` and `ctx.strokeStyle` and requests a redraw without resizing.
 - Result: No flash when adjusting brush size or color; smooth redraws at the scheduled frame rate.
+
+### Touch and Apple Pencil Support — UPDATED
+
+- Behavior: Drawing now works with Apple Pencil and finger touch on iPad and other touch devices.
+- Root cause previously: `onPointerDown` ignored `pointerType === "touch"`, allowing only `mouse` and `pen`.
+- Change: Accept `touch` pointers and only enforce `button === 0` for `mouse`.
+- Code location: `src/components/CanvasBoard.tsx` in the `onPointerDown` handler.
+- Additional detail: The canvas retains `touch-action: none` via the `touch-none` class to prevent browser gestures from interfering with drawing.
 
 ### Image Uploads & Cloudinary
 
@@ -318,6 +315,14 @@ Acceptance:
   - Left: `left-4 top-4 flex-col gap-4`
   - Right: `right-4 top-1/2 -translate-y-1/2 flex-col gap-4`
   - Generate button moved out of Actions and into a new right-side "Generate" card.
+
+#### GenerateControls vertical spacing — NEW
+
+- Adjusted section structure and spacing to ensure consistent separation:
+  - Prompt, Shortcuts, and Transform are now direct siblings wrapped in a `div.space-y-4`.
+  - Prompt block retains `space-y-1` for label→input proximity.
+  - Shortcuts remain a two-column grid with `gap-1`.
+  - File: `src/components/GenerateControls.tsx`.
 
 ## Creation Flow & Header Updates
 

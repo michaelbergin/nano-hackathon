@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import CollapsedControl from "./CollapsedControl";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -56,69 +57,50 @@ interface CollapsibleCardHeaderProps {
 function CollapsibleCardHeader({
   title,
   icon,
-  isCollapsed,
   onToggle,
   onDownload,
   onUpload,
 }: CollapsibleCardHeaderProps): JSX.Element {
   return (
-    <CardHeader
-      className={`${
-        isCollapsed
-          ? "p-0 h-16 w-16 flex items-center justify-center"
-          : "px-4 py-3"
-      }`}
-    >
-      <CardTitle
-        className={`flex items-center justify-between w-full ${
-          isCollapsed ? "text-sm" : "text-sm font-medium"
-        }`}
-      >
-        <div
-          className={`flex items-center min-w-0 flex-1 ${
-            isCollapsed ? "justify-center" : "gap-2"
-          }`}
-        >
+    <CardHeader className="px-4 py-3">
+      <CardTitle className="flex items-center justify-between w-full text-sm font-medium">
+        <div className="flex items-center min-w-0 flex-1 gap-2">
           <div className="flex-shrink-0">{icon}</div>
-          {!isCollapsed && (
-            <span className="truncate text-foreground/90">{title}</span>
-          )}
+          <span className="truncate text-foreground/90">{title}</span>
         </div>
-        {!isCollapsed && (
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {onDownload && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => void onDownload()}
-                className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors"
-                title="Download"
-              >
-                <Download className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            {onUpload && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onUpload}
-                className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors"
-                title="Upload Image"
-              >
-                <Upload className="h-3.5 w-3.5" />
-              </Button>
-            )}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {onDownload && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={onToggle}
-              className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors flex items-center justify-center"
-              title={`Collapse ${title}`}
+              onClick={() => void onDownload()}
+              className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors"
+              title="Download"
             >
-              <ChevronDown className="h-4 w-4" />
+              <Download className="h-3.5 w-3.5" />
             </Button>
-          </div>
-        )}
+          )}
+          {onUpload && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onUpload}
+              className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors"
+              title="Upload Image"
+            >
+              <Upload className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onToggle}
+            className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors flex items-center justify-center"
+            title={`Collapse ${title}`}
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        </div>
       </CardTitle>
     </CardHeader>
   );
@@ -181,68 +163,76 @@ function LayerControlsBase({
   };
 
   return (
-    <Card
-      className={`shadow-lg border bg-background/95 backdrop-blur-sm transition-all duration-200 ease-in-out overflow-hidden select-text ${
-        isCollapsed ? "w-16 h-16 cursor-pointer" : "w-80"
-      } ${!isCollapsed ? "max-h-[60vh] flex flex-col" : ""}`}
-      onClick={isCollapsed ? onToggleCollapsed : undefined}
-    >
-      <CollapsibleCardHeader
-        title="Layers"
-        icon={<Layers className="h-4 w-4" />}
-        isCollapsed={isCollapsed}
-        onToggle={onToggleCollapsed}
-        onDownload={onDownload}
-        onUpload={onUpload}
-        fileInputRef={fileInputRef}
-      />
-      {!isCollapsed && (
-        <CardContent className="px-4 pb-3 pt-0 gap-2 flex-1 min-h-0 flex flex-col">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={onDragEnd}
-          >
-            <SortableContext
-              items={layersTopToBottom.map((l) => l.id)}
-              strategy={verticalListSortingStrategy}
+    <CollapsedControl
+      open={!isCollapsed}
+      onOpen={onToggleCollapsed}
+      onClose={onToggleCollapsed}
+      alignment="top-right"
+      collapsedClassName="w-16 h-16"
+      expandedClassName="w-80"
+      collapsed={
+        <Card collapsed className="w-16 h-16 p-0 cursor-pointer shadow-lg flex items-center justify-center">
+          <Layers className="h-5 w-5" />
+        </Card>
+      }
+      expanded={
+        <Card className="shadow-lg border bg-background/95 backdrop-blur-sm overflow-hidden select-none max-h-[60vh] flex flex-col">
+          <CollapsibleCardHeader
+            title="Layers"
+            icon={<Layers className="h-4 w-4" />}
+            isCollapsed={false}
+            onToggle={onToggleCollapsed}
+            onDownload={onDownload}
+            onUpload={onUpload}
+            fileInputRef={fileInputRef}
+          />
+          <CardContent className="px-4 pb-3 pt-0 gap-2 flex-1 min-h-0 flex flex-col">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={onDragEnd}
             >
-              <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent pr-1">
-                <div className="space-y-1">
-                  {layersTopToBottom.map((layer) => {
-                    const isActive = layer.id === activeLayerId;
-                    return (
-                      <SortableLayerRow
-                        key={layer.id}
-                        id={layer.id}
-                        isActive={isActive}
-                        layer={layer}
-                        onSelect={onSelectLayer}
-                        onToggleVisibility={onToggleLayerVisibility}
-                        onRemove={onRemoveLayer}
-                        onClear={onClearLayer}
-                        canRemove={layers.length > 1}
-                        onSetBackgroundColor={onSetBackgroundColor}
-                      />
-                    );
-                  })}
+              <SortableContext
+                items={layersTopToBottom.map((l) => l.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent pr-1">
+                  <div className="space-y-1">
+                    {layersTopToBottom.map((layer) => {
+                      const isActive = layer.id === activeLayerId;
+                      return (
+                        <SortableLayerRow
+                          key={layer.id}
+                          id={layer.id}
+                          isActive={isActive}
+                          layer={layer}
+                          onSelect={onSelectLayer}
+                          onToggleVisibility={onToggleLayerVisibility}
+                          onRemove={onRemoveLayer}
+                          onClear={onClearLayer}
+                          canRemove={layers.length > 1}
+                          onSetBackgroundColor={onSetBackgroundColor}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            </SortableContext>
-          </DndContext>
+              </SortableContext>
+            </DndContext>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onAddLayer()}
-            className="w-full h-9 text-sm font-medium border-dashed hover:border-solid transition-all duration-200 hover:bg-muted/50"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Layer
-          </Button>
-        </CardContent>
-      )}
-    </Card>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onAddLayer()}
+              className="w-full h-9 text-sm font-medium border-dashed hover:border-solid transition-all duration-200 hover:bg-muted/50"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Layer
+            </Button>
+          </CardContent>
+        </Card>
+      }
+    />
   );
 }
 
@@ -329,7 +319,7 @@ function SortableLayerRow({
           {"banana" in layer && layer.banana && (
             <Banana className="h-3 w-3 text-yellow-500 flex-shrink-0" />
           )}
-          <span className="truncate text-xs font-medium text-foreground/90 select-text">
+          <span className="truncate text-xs font-medium text-foreground/90 select-none">
             {layer.name}
           </span>
         </div>

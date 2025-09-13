@@ -35,7 +35,7 @@ export default async function Page() {
       ) : (
         <main className="mx-auto max-w-3xl p-6 space-y-8 w-full">
           <header className="space-y-2 text-center">
-            <h1 className="text-4xl font-bold tracking-tight">Banananano</h1>
+            <h1 className="text-4xl font-bold tracking-tight">MonkeyDoodle</h1>
             <p className="text-lg text-muted-foreground">Fun with AI</p>
           </header>
 
@@ -104,7 +104,7 @@ export default async function Page() {
           </Card>
 
           <footer className="text-center text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} Banananano
+            &copy; {new Date().getFullYear()} MonkeyDoodle
           </footer>
         </main>
       )}

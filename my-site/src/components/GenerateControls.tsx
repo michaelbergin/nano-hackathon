@@ -36,38 +36,29 @@ function CollapsibleCardHeader({
   isCollapsed,
   onToggle,
 }: CollapsibleCardHeaderProps): JSX.Element {
+  if (isCollapsed) {
+    return (
+      <div className="h-16 w-16 p-0 flex items-center justify-center">
+        <div className="flex-shrink-0">{icon}</div>
+      </div>
+    );
+  }
   return (
-    <div
-      className={`${
-        isCollapsed
-          ? "p-0 h-16 w-16 flex items-center justify-center"
-          : "px-4 py-3"
-      }`}
-    >
-      <div
-        className={`flex items-center justify-between w-full ${
-          isCollapsed ? "text-sm" : "text-base"
-        }`}
-      >
-        <div
-          className={`flex items-center ${
-            isCollapsed ? "justify-center" : "gap-2"
-          }`}
-        >
+    <div className="px-4 py-3">
+      <div className="flex items-center justify-between w-full text-base">
+        <div className="flex items-center gap-2">
           <div className="flex-shrink-0">{icon}</div>
-          {!isCollapsed && <span>{title}</span>}
+          <span>{title}</span>
         </div>
-        {!isCollapsed && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onToggle(panel)}
-            className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors flex items-center justify-center"
-            title={`Collapse ${title}`}
-          >
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onToggle(panel)}
+          className="h-7 w-7 p-0 hover:bg-muted/80 transition-colors flex items-center justify-center"
+          title={`Collapse ${title}`}
+        >
+          <ChevronDown className="h-4 w-4" />
+        </Button>
       </div>
     </div>
   );
@@ -320,6 +311,7 @@ export function GenerateControls({
     <div className="pointer-events-none absolute bottom-4 right-4 z-10">
       <div className="pointer-events-auto select-none">
         <Card
+          collapsed={isCollapsed}
           className={`shadow-lg transition-all duration-200 ${
             isCollapsed ? "w-16 h-16 cursor-pointer" : "w-80"
           }`}
@@ -333,9 +325,44 @@ export function GenerateControls({
             onToggle={() => onToggleCollapsed()}
           />
           {!isCollapsed && (
-            <CardContent className="px-4 pb-3 pt-0 space-y-2">
-              <div className="space-y-1">
-                {/* <Label className="text-sm font-medium">Shortcuts</Label> */}
+            <CardContent className="px-4 pb-3 pt-0">
+              <div className="space-y-6">
+                {/* Prompt */}
+                <div className="space-y-1">
+                  <Label htmlFor="bananaPrompt" className="text-sm font-medium">
+                    Prompt
+                  </Label>
+                  <div className="relative">
+                    <Textarea
+                      id="bananaPrompt"
+                      placeholder="banana-fy this image"
+                      value={bananaPrompt}
+                      onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
+                        onSetBananaPrompt(e.target.value)
+                      }
+                      className="text-sm resize-none select-text pr-10"
+                      rows={2}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className={`absolute right-2 top-2 h-6 w-6 p-0 hover:bg-muted ${
+                        isRecording ? "text-red-600 animate-pulse" : ""
+                      }`}
+                      onClick={handleMicClick}
+                      disabled={isGenerating}
+                      title={
+                        isRecording ? "Stop recording" : "Start voice input"
+                      }
+                      aria-pressed={isRecording}
+                    >
+                      <Mic className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Shortcuts */}
                 <div className="grid grid-cols-2 gap-1">
                   {shortcuts.map((s) => (
                     <Button
@@ -352,48 +379,17 @@ export function GenerateControls({
                     </Button>
                   ))}
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="bananaPrompt" className="text-sm font-medium">
-                  Prompt
-                </Label>
-                <div className="relative">
-                  <Textarea
-                    id="bananaPrompt"
-                    placeholder="banana-fy this image"
-                    value={bananaPrompt}
-                    onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
-                      onSetBananaPrompt(e.target.value)
-                    }
-                    className="text-sm resize-none select-text pr-10"
-                    rows={2}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className={`absolute right-2 top-2 h-6 w-6 p-0 hover:bg-muted ${
-                      isRecording ? "text-red-600 animate-pulse" : ""
-                    }`}
-                    onClick={handleMicClick}
-                    disabled={isGenerating}
-                    title={isRecording ? "Stop recording" : "Start voice input"}
-                    aria-pressed={isRecording}
-                  >
-                    <Mic className="h-3 w-3" />
-                  </Button>
-                </div>
+                {/* Transform */}
+                <Button
+                  onClick={onGenerateBanana}
+                  disabled={isGenerating}
+                  className="w-full bg-yellow-500 hover:bg-yellow-600 text-yellow-950"
+                >
+                  <Wand2 className="h-4 w-4 mr-2" />
+                  {isGenerating ? "Generating…" : "Transform"}
+                </Button>
               </div>
-
-              <Button
-                onClick={onGenerateBanana}
-                disabled={isGenerating}
-                className="w-full bg-yellow-500 hover:bg-yellow-600 text-yellow-950"
-              >
-                <Wand2 className="h-4 w-4 mr-2" />
-                {isGenerating ? "Generating…" : "Transform"}
-              </Button>
             </CardContent>
           )}
         </Card>

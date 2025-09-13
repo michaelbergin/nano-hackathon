@@ -747,14 +747,16 @@ export function CanvasBoard({
 
   const onPointerDown = useCallback(
     (evt: PointerEvent): void => {
-      // Only draw with primary pointer, and only for pen or mouse (ignore fingers)
+      // Only draw with the primary pointer. Allow mouse, pen, and touch.
       if (!evt.isPrimary) {
         return;
       }
-      if (evt.pointerType !== "mouse" && evt.pointerType !== "pen") {
+      const type = evt.pointerType;
+      if (type !== "mouse" && type !== "pen" && type !== "touch") {
         return;
       }
-      if (evt.button !== 0) {
+      // For mouse, restrict to left button; touch/pen do not use mouse buttons
+      if (type === "mouse" && evt.button !== 0) {
         return;
       }
       (evt.target as Element).setPointerCapture(evt.pointerId);
