@@ -7,6 +7,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserStatus {
+  waitlist
+  user
+  userPro
+  admin
+}
+
 model Subscriber {
   id        Int      @id @default(autoincrement())
   email     String   @unique
@@ -14,20 +21,35 @@ model Subscriber {
 }
 
 model User {
-  id             Int      @id @default(autoincrement())
-  email          String   @unique
-  hashedPassword String
-  role           String   @default("admin")
-  createdAt      DateTime @default(now())
-  projects       Project[]
+  id        String     @id // Stack Auth user ID
+  email     String     @unique
+  name      String?
+  avatarUrl String?
+  status    UserStatus @default(waitlist)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  projects  Project[]
+  prompts   Prompt[]
 }
 
 model Project {
-  id        Int      @id @default(autoincrement())
-  name      String
-  data      String?  // JSON string for canvas data
+  id            Int      @id @default(autoincrement())
+  name          String
+  data          String?  // JSON string for canvas data
   screenshotUrl String?
-  userId    Int
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Prompt {
+  id        Int      @id @default(autoincrement())
+  title     String
+  prompt    String
+  userId    String
   user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
