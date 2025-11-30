@@ -1,7 +1,7 @@
 "use client";
 
 import type { JSX, ChangeEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,14 +20,7 @@ import {
   Fish,
   Mic,
 } from "lucide-react";
-
-interface CustomPrompt {
-  id: number;
-  title: string;
-  prompt: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import { useStylesCache } from "@/hooks/useStylesCache";
 
 interface CollapsibleCardHeaderProps {
   title: string;
@@ -131,36 +124,13 @@ export function GenerateControls({
   const recognitionRef = useRef<MinimalSpeechRecognition | null>(null);
   const promptRef = useRef<string>(bananaPrompt);
 
-  // Custom prompts state
-  const [customPrompts, setCustomPrompts] = useState<CustomPrompt[]>([]);
-  const [isLoadingPrompts, setIsLoadingPrompts] = useState<boolean>(false);
-  const [promptsError, setPromptsError] = useState<string>("");
-
-  const fetchCustomPrompts = useCallback(async (): Promise<void> => {
-    setIsLoadingPrompts(true);
-    setPromptsError("");
-    try {
-      const res = await fetch("/api/prompts");
-      const data = await res.json();
-      if (data.ok && Array.isArray(data.prompts)) {
-        setCustomPrompts(data.prompts);
-      } else if (!data.ok && data.error === "Not authenticated") {
-        // User not logged in - silently skip
-        setCustomPrompts([]);
-      } else {
-        setPromptsError(data.error ?? "Failed to load prompts");
-      }
-    } catch {
-      // Network error or not authenticated - silently fail
-      setCustomPrompts([]);
-    } finally {
-      setIsLoadingPrompts(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchCustomPrompts();
-  }, [fetchCustomPrompts]);
+  // Custom prompts from cache
+  const {
+    prompts: customPrompts,
+    isLoading: isLoadingPrompts,
+    error: promptsError,
+    refresh: fetchCustomPrompts,
+  } = useStylesCache();
 
   useEffect(() => {
     promptRef.current = bananaPrompt;
@@ -521,34 +491,13 @@ export function GenerateControlsContent({
   const recognitionRef = useRef<MinimalSpeechRecognition | null>(null);
   const promptRef = useRef<string>(bananaPrompt);
 
-  // Custom prompts state
-  const [customPrompts, setCustomPrompts] = useState<CustomPrompt[]>([]);
-  const [isLoadingPrompts, setIsLoadingPrompts] = useState<boolean>(false);
-  const [promptsError, setPromptsError] = useState<string>("");
-
-  const fetchCustomPrompts = useCallback(async (): Promise<void> => {
-    setIsLoadingPrompts(true);
-    setPromptsError("");
-    try {
-      const res = await fetch("/api/prompts");
-      const data = await res.json();
-      if (data.ok && Array.isArray(data.prompts)) {
-        setCustomPrompts(data.prompts);
-      } else if (!data.ok && data.error === "Not authenticated") {
-        setCustomPrompts([]);
-      } else {
-        setPromptsError(data.error ?? "Failed to load prompts");
-      }
-    } catch {
-      setCustomPrompts([]);
-    } finally {
-      setIsLoadingPrompts(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchCustomPrompts();
-  }, [fetchCustomPrompts]);
+  // Custom prompts from cache
+  const {
+    prompts: customPrompts,
+    isLoading: isLoadingPrompts,
+    error: promptsError,
+    refresh: fetchCustomPrompts,
+  } = useStylesCache();
 
   useEffect(() => {
     promptRef.current = bananaPrompt;

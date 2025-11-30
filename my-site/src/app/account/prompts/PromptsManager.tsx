@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, type JSX, type FormEvent } from "react";
+import { useState, useCallback, type JSX, type FormEvent } from "react";
 import {
   Plus,
   Pencil,
@@ -16,14 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-interface Prompt {
-  id: number;
-  title: string;
-  prompt: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import { useStylesCache } from "@/hooks/useStylesCache";
+import type { CachedPrompt } from "@/lib/stylesCache";
 
 interface PromptsManagerProps {
   userEmail: string;
@@ -33,10 +27,18 @@ const MAX_PROMPTS = 10;
 
 /**
  * Client component for managing custom styles
+ * Uses localStorage caching for fast initial load
  */
 export function PromptsManager({ userEmail }: PromptsManagerProps): JSX.Element {
-  const [prompts, setPrompts] = useState<Prompt[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const {
+    prompts,
+    isLoading,
+    refresh: fetchPrompts,
+    addPrompt,
+    updatePrompt,
+    removePrompt,
+  } = useStylesCache();
+
   const [isCreating, setIsCreating] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -45,25 +47,6 @@ export function PromptsManager({ userEmail }: PromptsManagerProps): JSX.Element 
   const [formTitle, setFormTitle] = useState<string>("");
   const [formPrompt, setFormPrompt] = useState<string>("");
   const [error, setError] = useState<string>("");
-
-  const fetchPrompts = useCallback(async (): Promise<void> => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/prompts");
-      const data = await res.json();
-      if (data.ok && Array.isArray(data.prompts)) {
-        setPrompts(data.prompts);
-      }
-    } catch (err) {
-      console.error("Failed to fetch prompts:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchPrompts();
-  }, [fetchPrompts]);
 
   const resetForm = useCallback((): void => {
     setFormTitle("");
@@ -88,7 +71,7 @@ export function PromptsManager({ userEmail }: PromptsManagerProps): JSX.Element 
       const data = await res.json();
 
       if (data.ok) {
-        setPrompts((prev) => [data.prompt, ...prev]);
+        addPrompt(data.prompt); // Optimistic update with cache
         resetForm();
       } else {
         setError(data.error ?? "Failed to create prompt");
@@ -98,7 +81,7 @@ export function PromptsManager({ userEmail }: PromptsManagerProps): JSX.Element 
     } finally {
       setIsSaving(false);
     }
-  }, [formTitle, formPrompt, resetForm]);
+  }, [formTitle, formPrompt, resetForm, addPrompt]);
 
   const handleUpdate = useCallback(async (e: FormEvent): Promise<void> => {
     e.preventDefault();
@@ -118,9 +101,7 @@ export function PromptsManager({ userEmail }: PromptsManagerProps): JSX.Element 
       const data = await res.json();
 
       if (data.ok) {
-        setPrompts((prev) =>
-          prev.map((p) => (p.id === editingId ? data.prompt : p))
-        );
+        updatePrompt(data.prompt); // Optimistic update with cache
         resetForm();
       } else {
         setError(data.error ?? "Failed to update prompt");
@@ -130,7 +111,7 @@ export function PromptsManager({ userEmail }: PromptsManagerProps): JSX.Element 
     } finally {
       setIsSaving(false);
     }
-  }, [editingId, formTitle, formPrompt, resetForm]);
+  }, [editingId, formTitle, formPrompt, resetForm, updatePrompt]);
 
   const handleDelete = useCallback(async (id: number): Promise<void> => {
     if (!confirm("Are you sure you want to delete this prompt?")) {
@@ -145,16 +126,16 @@ export function PromptsManager({ userEmail }: PromptsManagerProps): JSX.Element 
       const data = await res.json();
 
       if (data.ok) {
-        setPrompts((prev) => prev.filter((p) => p.id !== id));
+        removePrompt(id); // Optimistic update with cache
       } else {
         alert(data.error ?? "Failed to delete prompt");
       }
     } catch {
       alert("Network error - please try again");
     }
-  }, []);
+  }, [removePrompt]);
 
-  const startEdit = useCallback((prompt: Prompt): void => {
+  const startEdit = useCallback((prompt: CachedPrompt): void => {
     setEditingId(prompt.id);
     setFormTitle(prompt.title);
     setFormPrompt(prompt.prompt);
