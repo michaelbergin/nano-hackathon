@@ -3,25 +3,11 @@
 import type { JSX } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import {
-  Menu,
-  Plus,
-  FileText,
-  FolderOpen,
-  Clock,
-  Banana,
-} from "lucide-react";
+import { Menu, Plus, Banana } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { UserButton } from "@stackframe/stack";
+import { Navigation } from "./Navigation";
 
 interface HeaderProps {
   projectId?: number;
@@ -37,9 +23,6 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
   const [pendingName, setPendingName] = useState<string>(projectName ?? "");
   const [isSavingName, setIsSavingName] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [recentProjects, setRecentProjects] = useState<
-    Array<{ id: number; name: string; lastOpenedAt: number }>
-  >([]);
   const [lastActiveProjectId, setLastActiveProjectId] = useState<number | null>(
     null
   );
@@ -120,17 +103,11 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
     }
   }, []);
 
-  // Load recent projects on mount so they show in nav even when not on a project page
-  useEffect((): void => {
-    const list = loadRecents()
-      .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)
-      .slice(0, 5);
-    setRecentProjects(list);
-  }, [loadRecents]);
-
   // When viewing a project, add/update it in recents with latest timestamp
   useEffect((): void => {
-    if (!projectId || !projectName) return;
+    if (!projectId || !projectName) {
+      return;
+    }
     const trimmed = projectName.trim();
     if (trimmed.toLowerCase() === "untitled") {
       return;
@@ -145,7 +122,6 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
       .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)
       .slice(0, 10);
     saveRecents(updated);
-    setRecentProjects(updated.slice(0, 5));
   }, [projectId, projectName, loadRecents, saveRecents]);
 
   const startEditingName = useCallback((): void => {
@@ -224,63 +200,10 @@ export function Header({ projectId, projectName }: HeaderProps): JSX.Element {
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="w-64 h-dvh overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Navigation</SheetTitle>
-            <SheetDescription>Access your projects and tools</SheetDescription>
-          </SheetHeader>
-          <nav className="space-y-2 mt-6">
-            <Link href="/new">
-              <Button variant="ghost" className="w-full justify-start">
-                <Plus className="h-4 w-4 mr-2" />
-                New Project
-              </Button>
-            </Link>
-            <Link
-              href={
-                projectId
-                  ? `/create?id=${projectId}`
-                  : lastActiveProjectId
-                  ? `/create?id=${lastActiveProjectId}`
-                  : "/projects"
-              }
-            >
-              <Button variant="ghost" className="w-full justify-start">
-                <FileText className="h-4 w-4 mr-2" />
-                Create
-              </Button>
-            </Link>
-            <Link href="/projects">
-              <Button variant="ghost" className="w-full justify-start">
-                <FolderOpen className="h-4 w-4 mr-2" />
-                Projects
-              </Button>
-            </Link>
-            {/* Divider after Projects */}
-            <div className="h-px bg-border my-2" />
-            {/* Recent Projects */}
-            {recentProjects.length > 0 ? (
-              <div className="space-y-1">
-                <div className="px-2 text-xs font-medium text-muted-foreground flex items-center gap-2">
-                  <Clock className="h-3.5 w-3.5" /> Recent projects
-                </div>
-                {recentProjects.map((p) => (
-                  <Link key={p.id} href={`/projects/${p.id}`}>
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-start truncate"
-                      title={p.name}
-                    >
-                      <span className="truncate">{p.name}</span>
-                    </Button>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <div className="px-2 text-xs text-muted-foreground">
-                No recent projects
-              </div>
-            )}
-          </nav>
+          <Navigation
+            projectId={projectId}
+            lastActiveProjectId={lastActiveProjectId}
+          />
         </SheetContent>
       </Sheet>
 

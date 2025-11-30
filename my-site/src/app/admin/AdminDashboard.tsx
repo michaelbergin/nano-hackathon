@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type JSX } from "react";
-import Link from "next/link";
 import {
-  ArrowLeft,
   Search,
   Users,
   Crown,
@@ -47,26 +45,26 @@ const STATUS_CONFIG: Record<
   waitlist: {
     label: "Waitlist",
     icon: Clock,
-    color: "text-amber-400",
-    bgColor: "bg-amber-500/10 border-amber-500/20",
+    color: "text-amber-600",
+    bgColor: "bg-amber-50 border-amber-200",
   },
   user: {
     label: "User",
     icon: UserCheck,
-    color: "text-emerald-400",
-    bgColor: "bg-emerald-500/10 border-emerald-500/20",
+    color: "text-emerald-600",
+    bgColor: "bg-emerald-50 border-emerald-200",
   },
   userPro: {
     label: "Pro",
     icon: Sparkles,
-    color: "text-purple-400",
-    bgColor: "bg-purple-500/10 border-purple-500/20",
+    color: "text-purple-600",
+    bgColor: "bg-purple-50 border-purple-200",
   },
   admin: {
     label: "Admin",
     icon: Crown,
-    color: "text-rose-400",
-    bgColor: "bg-rose-500/10 border-rose-500/20",
+    color: "text-rose-600",
+    bgColor: "bg-rose-50 border-rose-200",
   },
 };
 
@@ -158,26 +156,17 @@ export function AdminDashboard({ adminEmail }: AdminDashboardProps): JSX.Element
   };
 
   return (
-    <div className="min-h-dvh w-full bg-[#0a0a0b] text-white">
-      {/* Header */}
-      <header className="border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="gap-2 text-zinc-400 hover:text-white">
-                <ArrowLeft className="w-4 h-4" />
-                Back
-              </Button>
-            </Link>
-            <div className="h-6 w-px bg-zinc-700" />
-            <div className="flex items-center gap-2">
-              <Crown className="w-5 h-5 text-rose-400" />
-              <h1 className="text-lg font-semibold">Admin Panel</h1>
-            </div>
+    <div className="h-full w-full overflow-auto bg-background">
+      {/* Page Header */}
+      <div className="border-b bg-muted/30 px-4 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Crown className="w-5 h-5 text-rose-500" />
+            <h1 className="text-lg font-semibold">Admin Panel</h1>
           </div>
-          <div className="text-sm text-zinc-500">{adminEmail}</div>
+          <div className="text-sm text-muted-foreground">{adminEmail}</div>
         </div>
-      </header>
+      </div>
 
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
@@ -194,12 +183,12 @@ export function AdminDashboard({ adminEmail }: AdminDashboardProps): JSX.Element
                 className={`p-4 rounded-xl border transition-all ${
                   statusFilter === status
                     ? `${config.bgColor} border-current`
-                    : "bg-zinc-900/50 border-zinc-800 hover:border-zinc-700"
+                    : "bg-card border-border hover:border-muted-foreground/30"
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1">
                   <Icon className={`w-4 h-4 ${config.color}`} />
-                  <span className="text-sm text-zinc-400">{config.label}</span>
+                  <span className="text-sm text-muted-foreground">{config.label}</span>
                 </div>
                 <div className="text-2xl font-semibold">{count}</div>
               </button>
@@ -211,16 +200,16 @@ export function AdminDashboard({ adminEmail }: AdminDashboardProps): JSX.Element
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <form onSubmit={handleSearchSubmit} className="flex-1 flex gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 type="text"
                 placeholder="Search by email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500"
+                className="pl-10"
               />
             </div>
-            <Button type="submit" variant="secondary" className="bg-zinc-800 hover:bg-zinc-700">
+            <Button type="submit" variant="secondary">
               Search
             </Button>
           </form>
@@ -229,43 +218,42 @@ export function AdminDashboard({ adminEmail }: AdminDashboardProps): JSX.Element
             size="icon"
             onClick={() => fetchUsers()}
             disabled={isLoading}
-            className="border-zinc-800 hover:bg-zinc-800"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
           </Button>
         </div>
 
         {/* Users table */}
-        <div className="rounded-xl border border-zinc-800 overflow-hidden bg-zinc-900/30">
+        <div className="rounded-xl border overflow-hidden bg-card">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-zinc-800 bg-zinc-900/50">
-                  <th className="text-left text-xs font-medium text-zinc-400 uppercase tracking-wider px-4 py-3">
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">
                     User
                   </th>
-                  <th className="text-left text-xs font-medium text-zinc-400 uppercase tracking-wider px-4 py-3">
+                  <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">
                     Status
                   </th>
-                  <th className="text-left text-xs font-medium text-zinc-400 uppercase tracking-wider px-4 py-3">
+                  <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">
                     Joined
                   </th>
-                  <th className="text-right text-xs font-medium text-zinc-400 uppercase tracking-wider px-4 py-3">
+                  <th className="text-right text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800">
+              <tbody className="divide-y">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">
+                    <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
                       <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />
                       Loading users...
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">
+                    <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
                       <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
                       No users found
                     </td>
@@ -277,12 +265,12 @@ export function AdminDashboard({ adminEmail }: AdminDashboardProps): JSX.Element
                     const isUpdating = updatingUserId === user.id;
 
                     return (
-                      <tr key={user.id} className="hover:bg-zinc-800/30 transition-colors">
+                      <tr key={user.id} className="hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-3">
                           <div className="flex flex-col">
-                            <span className="font-medium text-white">{user.email}</span>
+                            <span className="font-medium">{user.email}</span>
                             {user.name && (
-                              <span className="text-sm text-zinc-500">{user.name}</span>
+                              <span className="text-sm text-muted-foreground">{user.name}</span>
                             )}
                           </div>
                         </td>
@@ -295,7 +283,7 @@ export function AdminDashboard({ adminEmail }: AdminDashboardProps): JSX.Element
                             {config.label}
                           </Badge>
                         </td>
-                        <td className="px-4 py-3 text-sm text-zinc-400">
+                        <td className="px-4 py-3 text-sm text-muted-foreground">
                           {formatDate(user.createdAt)}
                         </td>
                         <td className="px-4 py-3">
@@ -315,7 +303,7 @@ export function AdminDashboard({ adminEmail }: AdminDashboardProps): JSX.Element
                                     className={`h-8 px-2 ${
                                       isActive
                                         ? `${statusConfig.color} opacity-100`
-                                        : "text-zinc-500 hover:text-white opacity-50 hover:opacity-100"
+                                        : "text-muted-foreground hover:text-foreground opacity-50 hover:opacity-100"
                                     }`}
                                     title={`Set as ${statusConfig.label}`}
                                   >
@@ -336,8 +324,8 @@ export function AdminDashboard({ adminEmail }: AdminDashboardProps): JSX.Element
 
           {/* Pagination */}
           {pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800 bg-zinc-900/50">
-              <div className="text-sm text-zinc-500">
+            <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/30">
+              <div className="text-sm text-muted-foreground">
                 Showing {(pagination.page - 1) * pagination.limit + 1} to{" "}
                 {Math.min(pagination.page * pagination.limit, pagination.total)} of{" "}
                 {pagination.total} users
@@ -348,7 +336,6 @@ export function AdminDashboard({ adminEmail }: AdminDashboardProps): JSX.Element
                   size="sm"
                   disabled={pagination.page === 1}
                   onClick={() => setPagination((p) => ({ ...p, page: p.page - 1 }))}
-                  className="border-zinc-800 hover:bg-zinc-800"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
@@ -357,7 +344,6 @@ export function AdminDashboard({ adminEmail }: AdminDashboardProps): JSX.Element
                   size="sm"
                   disabled={pagination.page === pagination.totalPages}
                   onClick={() => setPagination((p) => ({ ...p, page: p.page + 1 }))}
-                  className="border-zinc-800 hover:bg-zinc-800"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </Button>

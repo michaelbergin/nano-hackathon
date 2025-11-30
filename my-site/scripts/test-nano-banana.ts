@@ -18,7 +18,7 @@ async function main(): Promise<void> {
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAIUlEQVQoU2NkYGBg+M+ABYwMjAxGQwMD/7E0GAAAK2wE5j3I0c4AAAAASUVORK5CYII=";
 
   const image = process.env.TEST_IMAGE_URL ?? defaultPng;
-  const prompt = process.env.TEST_PROMPT ?? "banana-fy test";
+  const prompt = process.env.TEST_PROMPT ?? "Make my sketch realistic";
 
   // Test the system prompt generation
   try {

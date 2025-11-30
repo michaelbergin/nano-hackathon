@@ -2,6 +2,7 @@ import type { JSX } from "react";
 import { redirect } from "next/navigation";
 import { stackServerApp } from "@/stack/server";
 import { syncUserToDatabase, hasAdminAccess } from "@/lib/userSync";
+import { AppShell } from "@/components/AppShell";
 import { AdminDashboard } from "./AdminDashboard";
 
 /**
@@ -25,6 +26,10 @@ export default async function AdminPage(): Promise<JSX.Element> {
     redirect("/");
   }
 
-  return <AdminDashboard adminEmail={dbUser.email} />;
+  return (
+    <AppShell>
+      <AdminDashboard adminEmail={dbUser.email} />
+    </AppShell>
+  );
 }
 

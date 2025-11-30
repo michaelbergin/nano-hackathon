@@ -989,7 +989,9 @@ export function CanvasBoard({
 
   // UI state for controls
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [bananaPrompt, setBananaPrompt] = useState<string>("banana-fy");
+  const [bananaPrompt, setBananaPrompt] = useState<string>(
+    "Make my sketch realistic"
+  );
 
   // Essential functions for controls
   const onClearActive = useCallback((): void => {
@@ -1011,7 +1013,7 @@ export function CanvasBoard({
       return;
     }
     const visibleLayers = state.layers.filter((l) => l.visible);
-    void (async () => {
+    (async () => {
       const dataUrl = await getCanvasScreenshotAsync(
         visibleLayers,
         Math.max(1, Math.floor(cssW)),
@@ -1095,14 +1097,12 @@ export function CanvasBoard({
           signature?: string;
           params?: Record<string, string>;
           cloudName?: string;
-          apiKey?: string;
         };
         if (
           !signJson.ok ||
           !signJson.signature ||
           !signJson.params ||
-          !signJson.cloudName ||
-          !signJson.apiKey
+          !signJson.cloudName
         ) {
           return null;
         }
@@ -1110,7 +1110,7 @@ export function CanvasBoard({
           form.append(k, v);
         }
         form.append("signature", signJson.signature);
-        form.append("api_key", signJson.apiKey);
+        form.append("api_key", "598646243146163");
         const res = await fetch(
           `https://api.cloudinary.com/v1_1/${signJson.cloudName}/image/upload`,
           {

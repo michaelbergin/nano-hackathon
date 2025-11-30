@@ -1,12 +1,12 @@
 "use client";
 
 import type { JSX, ChangeEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Banana, Wand2, ChevronDown } from "lucide-react";
+import { Banana, Wand2, ChevronDown, Star, RefreshCw } from "lucide-react";
 import {
   Sparkles,
   Paintbrush,
@@ -20,6 +20,14 @@ import {
   Fish,
   Mic,
 } from "lucide-react";
+
+interface CustomPrompt {
+  id: number;
+  title: string;
+  prompt: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 interface CollapsibleCardHeaderProps {
   title: string;
@@ -119,6 +127,37 @@ export function GenerateControls({
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const recognitionRef = useRef<MinimalSpeechRecognition | null>(null);
   const promptRef = useRef<string>(bananaPrompt);
+
+  // Custom prompts state
+  const [customPrompts, setCustomPrompts] = useState<CustomPrompt[]>([]);
+  const [isLoadingPrompts, setIsLoadingPrompts] = useState<boolean>(false);
+  const [promptsError, setPromptsError] = useState<string>("");
+
+  const fetchCustomPrompts = useCallback(async (): Promise<void> => {
+    setIsLoadingPrompts(true);
+    setPromptsError("");
+    try {
+      const res = await fetch("/api/prompts");
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.prompts)) {
+        setCustomPrompts(data.prompts);
+      } else if (!data.ok && data.error === "Not authenticated") {
+        // User not logged in - silently skip
+        setCustomPrompts([]);
+      } else {
+        setPromptsError(data.error ?? "Failed to load prompts");
+      }
+    } catch {
+      // Network error or not authenticated - silently fail
+      setCustomPrompts([]);
+    } finally {
+      setIsLoadingPrompts(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchCustomPrompts();
+  }, [fetchCustomPrompts]);
 
   useEffect(() => {
     promptRef.current = bananaPrompt;
@@ -260,7 +299,7 @@ export function GenerateControls({
       },
       {
         key: "animal-friends",
-        label: "Animal Friends",
+        label: "Animals",
         icon: <Dog className="h-4 w-4" />,
         prompt:
           "add friendly animal friends (puppy, kitten, bunny) smiling, simple cartoon style",
@@ -277,12 +316,6 @@ export function GenerateControls({
         label: "Clouds",
         icon: <Cloud className="h-4 w-4" />,
         prompt: "add soft fluffy clouds around, gentle storybook look",
-      },
-      {
-        key: "glitter",
-        label: "Magic Sparkles",
-        icon: <Wand2 className="h-4 w-4" />,
-        prompt: "sprinkle magic sparkles and gentle glow around the drawing",
       },
       {
         key: "cute-bugs",
@@ -335,7 +368,7 @@ export function GenerateControls({
                   <div className="relative">
                     <Textarea
                       id="bananaPrompt"
-                      placeholder="banana-fy this image"
+                      placeholder="Make my sketch realistic"
                       value={bananaPrompt}
                       onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
                         onSetBananaPrompt(e.target.value)
@@ -362,22 +395,63 @@ export function GenerateControls({
                   </div>
                 </div>
 
-                {/* Shortcuts */}
-                <div className="grid grid-cols-2 gap-1">
-                  {shortcuts.map((s) => (
-                    <Button
-                      key={s.key}
-                      variant="outline"
-                      size="sm"
-                      className="justify-start gap-2 text-xs"
-                      onClick={() => onSetBananaPrompt(s.prompt)}
-                      disabled={isGenerating}
-                      title={s.label}
-                    >
-                      {s.icon}
-                      {s.label}
-                    </Button>
-                  ))}
+                {/* Styles Section - Custom + Built-in */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Styles</Label>
+                    {customPrompts.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 w-5 p-0"
+                        onClick={() => void fetchCustomPrompts()}
+                        disabled={isLoadingPrompts}
+                        title="Refresh styles"
+                      >
+                        <RefreshCw
+                          className={`h-3 w-3 ${
+                            isLoadingPrompts ? "animate-spin" : ""
+                          }`}
+                        />
+                      </Button>
+                    )}
+                  </div>
+                  {promptsError && (
+                    <div className="text-xs text-red-500">{promptsError}</div>
+                  )}
+                  <div className="grid grid-cols-2 gap-1">
+                    {/* Custom styles first (with star) */}
+                    {customPrompts.map((cp) => (
+                      <Button
+                        key={`custom-${cp.id}`}
+                        variant="outline"
+                        size="sm"
+                        className="justify-start gap-2 text-xs border-yellow-200 bg-yellow-50/50 hover:bg-yellow-100/70 dark:border-yellow-900 dark:bg-yellow-950/30 dark:hover:bg-yellow-900/40"
+                        onClick={() => onSetBananaPrompt(cp.prompt)}
+                        disabled={isGenerating}
+                        title={cp.prompt}
+                      >
+                        <Star className="h-3.5 w-3.5 text-yellow-500 flex-shrink-0" />
+                        <span className="truncate">{cp.title}</span>
+                      </Button>
+                    ))}
+                    {/* Built-in styles */}
+                    {shortcuts.map((s) => (
+                      <Button
+                        key={s.key}
+                        variant="outline"
+                        size="sm"
+                        className="justify-start gap-2 text-xs"
+                        onClick={() => onSetBananaPrompt(s.prompt)}
+                        disabled={isGenerating}
+                        title={s.label}
+                      >
+                        {s.icon}
+                        {s.label}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Transform */}
