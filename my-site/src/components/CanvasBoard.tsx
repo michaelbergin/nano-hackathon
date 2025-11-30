@@ -1264,7 +1264,7 @@ export function CanvasBoard({
       <div ref={containerRef} className="absolute inset-0">
         <canvas
           ref={canvasRef}
-          className={`absolute inset-0 w-full h-full select-none touch-none ${
+          className={`absolute inset-0 w-full h-full select-none touch-none rounded-xl ${
             state.mode === "move"
               ? isDraggingUi
                 ? "cursor-grabbing"
