@@ -6,6 +6,7 @@ type ImageUrl = string;
 type NanoBananaEditInput = {
   prompt: string;
   images?: ImageUrl[];
+  usePro?: boolean;
 };
 
 export type NanoBananaEditResult = {
@@ -13,20 +14,30 @@ export type NanoBananaEditResult = {
   raw: unknown;
 };
 
-function assertEnv() {
+const NANO_BANANA_STANDARD_ENDPOINT = "fal-ai/nano-banana/edit";
+const NANO_BANANA_PRO_ENDPOINT = "fal-ai/nano-banana-pro/edit";
+
+function assertEnv(): void {
   if (!process.env.FAL_KEY) {
     throw new Error("FAL_KEY is not set. Add it to your environment.");
   }
 }
 
-function configureFal() {
+function configureFal(): void {
   assertEnv();
   fal.config({ credentials: process.env.FAL_KEY as string });
 }
 
+/**
+ * Runs the nano-banana edit endpoint.
+ * @param prompt - The prompt for image generation
+ * @param images - Optional array of image URLs
+ * @param usePro - If true, uses the nano-banana-pro endpoint (for userPro/admin users)
+ */
 export async function runNanoBananaEdit({
   prompt,
   images = [],
+  usePro = false,
 }: NanoBananaEditInput): Promise<NanoBananaEditResult> {
   configureFal();
 
@@ -40,7 +51,9 @@ export async function runNanoBananaEdit({
     output_format: "png",
   };
 
-  const result = await fal.subscribe("fal-ai/nano-banana/edit", {
+  const endpoint = usePro ? NANO_BANANA_PRO_ENDPOINT : NANO_BANANA_STANDARD_ENDPOINT;
+
+  const result = await fal.subscribe(endpoint, {
     input,
     logs: false,
   });
@@ -51,7 +64,7 @@ export async function runNanoBananaEdit({
   };
   const url = data.images?.[0]?.url ?? data.image?.url;
   if (!url || typeof url !== "string") {
-    throw new Error("nano-banana/edit did not return an image URL");
+    throw new Error(`${endpoint} did not return an image URL`);
   }
 
   return { imageUrl: url, raw: result };

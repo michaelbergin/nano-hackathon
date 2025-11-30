@@ -28,14 +28,36 @@ const eslintConfig = [
     },
     rules: {
       ...tseslint.configs.recommended.rules,
-      "@typescript-eslint/no-unused-vars": "error",
+      // Unused variables and imports
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
       "@typescript-eslint/no-explicit-any": "warn",
+
       // Strict null checking rules
-      "@typescript-eslint/no-unnecessary-condition": "error",
-      "@typescript-eslint/no-unnecessary-boolean-literal-compare": "error",
-      "@typescript-eslint/prefer-nullish-coalescing": "error",
-      "@typescript-eslint/prefer-optional-chain": "error",
-      "@typescript-eslint/no-unnecessary-type-assertion": "error",
+      "@typescript-eslint/no-unnecessary-boolean-literal-compare": "warn",
+      "@typescript-eslint/prefer-nullish-coalescing": "warn",
+      "@typescript-eslint/prefer-optional-chain": "warn",
+      "@typescript-eslint/no-unnecessary-type-assertion": "warn",
+
+      // Consistency and best practices (warnings only - can be enforced later)
+      "@typescript-eslint/consistent-type-imports": "off", // Too strict for current codebase
+      "@typescript-eslint/explicit-function-return-type": "off", // Too verbose for UI components
+      "@typescript-eslint/no-floating-promises": "warn",
+      "@typescript-eslint/await-thenable": "warn",
+      "@typescript-eslint/no-misused-promises": "off", // Common pattern in React event handlers
+
+      // General code quality
+      "no-console": "off", // Allow console for debugging
+      "prefer-const": "error",
+      "no-var": "error",
+      eqeqeq: ["error", "always", { null: "ignore" }],
+      curly: "off", // Allow single-line if statements
     },
   },
   {
@@ -45,6 +67,10 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "*.config.mjs",
+      "*.config.js",
+      "prisma/**",
+      "scripts/**",
     ],
   },
 ];

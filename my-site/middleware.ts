@@ -1,48 +1,53 @@
+import { stackServerApp } from "@/stack/server";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { jwtVerify } from "jose";
 
-function getSecret(): Uint8Array {
-  const secret = process.env.AUTH_SECRET;
-  if (secret == null || secret === "") {
-    throw new Error("AUTH_SECRET is not set");
-  }
-  return new TextEncoder().encode(secret);
-}
-
-export async function middleware(req: NextRequest) {
+/**
+ * Middleware for authentication and route protection
+ * 
+ * Route access levels:
+ * - Public: /, /handler/*, /api/subscribe, static assets
+ * - Authenticated: All other routes require Stack Auth session
+ * - Status-based access (handled in page components):
+ *   - /admin/* requires admin status
+ *   - App routes require user, userPro, or admin status
+ *   - waitlist users are redirected to / from app routes
+ */
+export async function middleware(req: NextRequest): Promise<NextResponse> {
   const { pathname } = req.nextUrl;
 
-  // Public paths
-  if (
+  // Public paths - allow access without authentication
+  const isPublicPath =
+    pathname === "/" ||
     pathname.startsWith("/_next") ||
-    pathname.startsWith("/api/login") ||
-    pathname.startsWith("/api/logout") ||
+    pathname.startsWith("/handler") ||
+    pathname.startsWith("/account/login") || // Legacy login redirect
     pathname.startsWith("/api/subscribe") ||
-    pathname.startsWith("/account/login") ||
-    pathname === "/favicon.ico"
-  ) {
+    pathname === "/favicon.ico" ||
+    pathname.endsWith(".png") ||
+    pathname.endsWith(".ico") ||
+    pathname.endsWith(".svg") ||
+    pathname.endsWith(".json");
+
+  if (isPublicPath) {
     return NextResponse.next();
   }
 
-  // Require auth cookie for everything else (including "/")
-  const token = req.cookies.get("auth")?.value;
-  if (token == null || token === "") {
+  // Check Stack Auth session for protected routes
+  const user = await stackServerApp.getUser();
+
+  if (!user) {
+    // Redirect to Stack Auth sign-in page
     const url = req.nextUrl.clone();
-    url.pathname = "/account/login";
+    url.pathname = "/handler/sign-in";
     return NextResponse.redirect(url);
   }
 
-  try {
-    await jwtVerify(token, getSecret());
-    return NextResponse.next();
-  } catch {
-    const url = req.nextUrl.clone();
-    url.pathname = "/account/login";
-    return NextResponse.redirect(url);
-  }
+  // User is authenticated - allow access
+  // Status-based access control is handled in individual pages/API routes
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/:path*"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

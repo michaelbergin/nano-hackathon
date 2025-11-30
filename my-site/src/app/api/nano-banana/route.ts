@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { runNanoBananaEdit } from "@/lib/fal";
-import { cookies } from "next/headers";
-import { verifyAuthToken } from "@/lib/auth";
+import { stackServerApp } from "@/stack/server";
 import { createRateLimiter } from "@/lib/rateLimit";
+import { syncUserToDatabase, type SyncedUser } from "@/lib/userSync";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 10;
@@ -32,21 +32,35 @@ async function isAllowedByRateLimit(key: string): Promise<boolean> {
   return result.allowed;
 }
 
-export async function POST(req: Request) {
+/**
+ * Checks if user status qualifies for pro endpoint access
+ */
+function hasProAccess(status: SyncedUser["status"]): boolean {
+  return status === "userPro" || status === "admin";
+}
+
+export async function POST(req: Request): Promise<NextResponse> {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth")?.value ?? null;
-    if (token == null) {
+    // Get user from Stack Auth
+    const stackUser = await stackServerApp.getUser();
+    if (!stackUser) {
       return NextResponse.json(
         { ok: false, error: "Not authenticated" },
         { status: 401 }
       );
     }
-    const payload = await verifyAuthToken(token);
-    if (payload == null) {
+
+    // Sync user to database and get their status
+    const dbUser = await syncUserToDatabase({
+      id: stackUser.id,
+      primaryEmail: stackUser.primaryEmail,
+      displayName: stackUser.displayName,
+    });
+
+    if (!dbUser) {
       return NextResponse.json(
-        { ok: false, error: "Invalid token" },
-        { status: 401 }
+        { ok: false, error: "Failed to sync user" },
+        { status: 500 }
       );
     }
 
@@ -68,7 +82,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const { imageUrl, raw } = await runNanoBananaEdit({ prompt, images });
+    // Route to pro endpoint if user is userPro or admin
+    const usePro = hasProAccess(dbUser.status);
+
+    const { imageUrl, raw } = await runNanoBananaEdit({
+      prompt,
+      images,
+      usePro,
+    });
 
     return NextResponse.json({ ok: true, image: imageUrl, raw });
   } catch (err: unknown) {

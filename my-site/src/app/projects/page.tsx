@@ -1,9 +1,9 @@
 import type { JSX } from "react";
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
-import { verifyAuthToken } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { stackServerApp } from "@/stack/server";
+import { syncUserToDatabase, hasAppAccess } from "@/lib/userSync";
 import Link from "next/link";
 import {
   Card,
@@ -18,17 +18,24 @@ import { Button } from "@/components/ui/button";
 import { Search, Plus, Calendar, FolderOpen } from "lucide-react";
 
 export default async function ProjectsPage(): Promise<JSX.Element> {
-  // Ensure user is authenticated
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth")?.value ?? null;
-  const payload = token ? await verifyAuthToken(token) : null;
-  if (!payload) {
-    redirect("/account/login");
+  // Ensure user is authenticated via Stack Auth
+  const user = await stackServerApp.getUser({ or: "redirect" });
+
+  // Sync user to database and check access
+  const dbUser = await syncUserToDatabase({
+    id: user.id,
+    primaryEmail: user.primaryEmail,
+    displayName: user.displayName,
+  });
+
+  // Redirect waitlist users back to landing page
+  if (!dbUser || !hasAppAccess(dbUser.status)) {
+    redirect("/");
   }
 
   // Only list projects that belong to this user
   const projects = (await prisma.project.findMany({
-    where: { userId: payload.userId },
+    where: { userId: user.id },
     orderBy: { createdAt: "desc" },
     take: 100,
   })) as Array<{
@@ -36,7 +43,7 @@ export default async function ProjectsPage(): Promise<JSX.Element> {
     name: string;
     data: string | null;
     screenshotUrl: string | null;
-    userId: number;
+    userId: string;
     createdAt: Date;
     updatedAt: Date;
   }>;

@@ -13,24 +13,36 @@ model Subscriber {
   createdAt DateTime @default(now())
 }
 
+// User status levels for access control
+enum UserStatus {
+  waitlist
+  user
+  userPro
+  admin
+}
+
+// Stack Auth uses string UUIDs for user IDs
+// This model syncs with Stack Auth users
 model User {
-  id             Int      @id @default(autoincrement())
-  email          String   @unique
-  hashedPassword String
-  role           String   @default("admin")
-  createdAt      DateTime @default(now())
-  projects       Project[]
+  id        String     @id // Stack Auth user ID (UUID string)
+  email     String     @unique
+  name      String?
+  avatarUrl String?
+  status    UserStatus @default(waitlist)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  projects  Project[]
 }
 
 model Project {
-  id        Int      @id @default(autoincrement())
-  name      String
-  data      String?  // JSON string for canvas data
+  id            Int      @id @default(autoincrement())
+  name          String
+  data          String?  // JSON string for canvas data
   screenshotUrl String?
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  userId        String   // Stack Auth user ID (UUID string)
+  user          User     @relation(fields: [userId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([userId])
 }

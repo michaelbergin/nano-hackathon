@@ -1,8 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
-import { cookies } from "next/headers";
-import { verifyAuthToken } from "@/lib/auth";
+import { stackServerApp } from "@/stack/server";
 
 function ensureConfigured(): void {
   const url = process.env.CLOUDINARY_URL;
@@ -14,21 +13,15 @@ function ensureConfigured(): void {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth")?.value ?? null;
-    if (token == null) {
+    // Get user from Stack Auth
+    const user = await stackServerApp.getUser();
+    if (!user) {
       return NextResponse.json(
         { ok: false, error: "Not authenticated" },
         { status: 401 }
       );
     }
-    const payload = await verifyAuthToken(token);
-    if (payload == null) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid token" },
-        { status: 401 }
-      );
-    }
+
     ensureConfigured();
     const body = (await req.json()) as unknown;
     const params =
@@ -77,6 +70,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       signature,
       params: toSign,
       cloudName: cloudinary.config().cloud_name,
+      apiKey: cloudinary.config().api_key,
     });
   } catch {
     // Avoid leaking secrets in error messages

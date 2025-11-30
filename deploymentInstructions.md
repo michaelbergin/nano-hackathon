@@ -93,50 +93,11 @@ Default admin (from seed): `michaelbergin@higharc.com` / `nanobanana`.
 
 ---
 
-## Render path (no schema change, SQLite with persistent disk)
-
-If you prefer to avoid changing `schema.prisma` now, deploy to Render with a persistent disk so `dev.db` is writable:
-
-### 1R) Create a Web Service
-
-1. On Render → New → Web Service → Connect GitHub repo.
-2. Root Directory: `my-site`
-3. Environment: `Node`
-4. Build Command: `yarn && npx prisma generate && yarn build`
-5. Start Command: `yarn start`
-6. Add a Disk (e.g., 1GB) mounted at `/opt/render/project/src/prisma/prisma` so the SQLite file `dev.db` is persisted.
-
-### 2R) Environment variables (Render → Environment)
-
-- `DATABASE_URL` = `file:./prisma/dev.db`
-- `AUTH_SECRET` = strong secret
-- `FAL_KEY` = fal.ai API key
-- `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` (optional)
-- `CLOUDINARY_URL` (optional, for signed uploads)
-
-Note: Ensure the working directory is `my-site` so relative `file:./prisma/dev.db` resolves. Alternatively, set an absolute path to the mounted disk file.
-
-### 3R) Initialize the database on first deploy
-
-Open a Shell in the Render service and run:
-
-```bash
-npx prisma migrate deploy
-node -e "require('ts-node/register'); require('./prisma/seed.ts')"
-```
-
-Subsequent deploys reuse the same SQLite file on the disk.
-
-### 4R) Verify
-
-- Login at `/account/login` with the seeded user.
-- Projects and screenshots should persist across restarts.
-
----
-
 ### Alternative hosts (quick notes)
 
 - Railway/Render/Fly: also work; point `DATABASE_URL` to a managed Postgres (Railway PG, Supabase, Neon). Ensure you run `prisma generate` and `prisma migrate deploy` on each deploy.
+
+> **Note:** SQLite (`file:./prisma/dev.db`) is no longer supported. Always use PostgreSQL (Neon recommended).
 
 ### Reference
 

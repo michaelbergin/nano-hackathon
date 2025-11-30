@@ -9,7 +9,7 @@ export default function NewProjectPage(): JSX.Element {
   const router = useRouter();
   useEffect(() => {
     const controller = new AbortController();
-    (async () => {
+    void (async () => {
       try {
         // If a project was just created in this session, reuse it to avoid duplicates
         const existing = sessionStorage.getItem("justCreatedProjectId");

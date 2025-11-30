@@ -1,137 +1,199 @@
-# Banananano - Shadcn/UI Implementation
+# MonkeyDoodle - Neon Auth (Stack Auth) Migration
 
-## Overview
+## Waitlist System
 
-Successfully implemented shadcn/ui components throughout the Banananano application, replacing all custom UI elements with best-in-class, accessible components.
+The application implements a waitlist system with role-based access control:
 
-## What Was Implemented
+### User Status Levels
 
-### Core Dependencies
+Users have one of four status levels (defined in `UserStatus` enum):
 
-- ✅ **shadcn/ui** - Complete component library setup
-- ✅ **lucide-react** - Icon library for consistent iconography
-- ✅ **class-variance-authority** - Component variant management
-- ✅ **clsx & tailwind-merge** - Utility functions for styling
+1. **waitlist** - Default status for new users. Cannot access the app.
+2. **user** - Standard user with app access.
+3. **userPro** - Pro user with app access (for future premium features).
+4. **admin** - Full access including admin panel.
 
-### Shadcn Components Added
+### Access Control Flow
 
-- **Button** - All interactive elements now use consistent button variants
-- **Input** - Form inputs with proper styling and accessibility
-- **Card** - Container components for content organization
-- **Sheet** - Slide-out navigation panel (replaces custom sidebar)
-- **Label** - Accessible form labels
-- **Form** - Form management (ready for future expansion)
-- **Badge** - Status indicators and metadata display
+1. New users sign up → automatically added with `waitlist` status
+2. Waitlist users see "You're on the list" message on landing page
+3. Admin promotes users to `user` status via Admin Panel (`/admin`)
+4. Users with `user`, `userPro`, or `admin` status can access the app
 
-### Updated Components
+### Admin Panel
 
-#### 1. AppShell (`src/components/AppShell.tsx`)
+- **URL**: `/admin`
+- **Access**: Only users with `admin` status
+- **Default Admin**: `michael.s.bergin@gmail.com`
+- **Features**:
+  - View all users with search/filter
+  - Change user status (waitlist → user → userPro → admin)
+  - Stats overview by status
 
-- **Before**: Custom sidebar with manual positioning and click-outside logic
-- **After**: Clean Sheet component with proper accessibility
-- **Improvements**:
-  - Proper ARIA attributes
-  - Keyboard navigation support
-  - Consistent spacing and typography
-  - Icon integration with lucide-react
+### Key Files
 
-#### 2. LoginForm (`src/app/account/login/LoginForm.tsx`)
+- `src/lib/userSync.ts` - User sync and access control utilities
+- `src/app/admin/page.tsx` - Admin panel (server component)
+- `src/app/admin/AdminDashboard.tsx` - Admin panel UI (client component)
+- `src/app/api/admin/users/route.ts` - List users API
+- `src/app/api/admin/users/[id]/route.ts` - Update user status API
 
-- **Before**: Basic HTML inputs and buttons
-- **After**: Professional card-based form with shadcn components
-- **Improvements**:
-  - Password visibility toggle
-  - Loading states with spinner
-  - Error state styling
-  - Proper form validation feedback
-  - Card layout for better visual hierarchy
+---
 
-#### 3. Main Page (`src/app/page.tsx`)
+## Authentication System
 
-- **Before**: Simple form and list layout
-- **After**: Card-based layout with proper typography
-- **Improvements**:
-  - Card components for content sections
-  - Icon integration
-  - Better visual hierarchy
-  - Consistent spacing and colors
+This application uses **Stack Auth** (Neon Auth) for authentication, providing:
 
-#### 4. Project Page (`src/app/projects/[id]/page.tsx`)
+- **Google SSO** - Sign in with Google account
+- **Email/Password** - Standard email and password registration
+- **Built-in UI** - Pre-built sign-in/sign-up pages at `/handler/sign-in` and `/handler/sign-up`
 
-- **Before**: Basic layout with minimal styling
-- **After**: Professional layout; canvas uses a dedicated `CanvasBoardContainer` (no vertical padding) instead of `Card` to allow the board to fill edge-to-edge.
-- **Improvements**:
-  - Card containers for header and content
-  - Badge component for metadata
-  - Icon integration
-  - Better visual separation
+## Environment Variables Required
 
-## Design Principles Applied
+Create a `.env.local` file with the following variables:
 
-### 1. Minimal and Elegant
+```bash
+# Database (Neon PostgreSQL)
+DATABASE_URL="postgresql://user:password@host/database?sslmode=require"
 
-- Clean component interfaces
-- Consistent spacing using Tailwind's design tokens
-- Proper visual hierarchy
-- Subtle shadows and borders
+# Stack Auth (Neon Auth)
+# Get these from https://app.stack-auth.com after creating a project
+NEXT_PUBLIC_STACK_PROJECT_ID="your-project-id"
+NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY="your-publishable-key"
+STACK_SECRET_SERVER_KEY="your-secret-server-key"
 
-### 2. Best Practices for Developer Experience
+# Cloudinary (for image uploads)
+CLOUDINARY_URL="cloudinary://API_KEY:API_SECRET@CLOUD_NAME"
+NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET="your-unsigned-preset"
 
-- **TypeScript**: Full type safety with proper JSX.Element types
-- **Accessibility**: ARIA attributes, keyboard navigation, screen reader support
-- **Performance**: Proper React patterns, memoization-ready components
-- **Maintainability**: Modular component structure, consistent naming
-
-### 3. Consistent Theming
-
-- Uses shadcn's design system with CSS custom properties
-- Dark/light mode ready (CSS variables in place)
-- Consistent color palette and typography
-- Proper contrast ratios for accessibility
-
-## Technical Implementation Details
-
-### Configuration
-
-- **shadcn config**: `components.json` with New York style
-- **Tailwind**: Integrated with shadcn's CSS variables
-- **Icons**: Lucide React with consistent sizing and styling
-
-### Component Architecture
-
-- **Composition**: Components use React composition patterns
-- **Variants**: Button and other components support multiple variants
-- **Accessibility**: All components include proper ARIA attributes
-- **TypeScript**: Strict typing throughout
-
-### File Structure
-
-```
-src/components/ui/          # shadcn components
-├── button.tsx
-├── input.tsx
-├── card.tsx
-├── sheet.tsx
-├── label.tsx
-├── form.tsx
-└── badge.tsx
+# FAL AI (for image generation)
+FAL_KEY="your-fal-api-key"
 ```
 
-## Benefits Achieved
+## Stack Auth Setup
 
-1. **Consistency**: All UI elements now follow the same design language
-2. **Accessibility**: Proper ARIA support and keyboard navigation
-3. **Maintainability**: Modular components that are easy to update
-4. **Developer Experience**: Type-safe, well-documented components
-5. **Performance**: Optimized React components with proper patterns
-6. **Future-Proof**: Easy to extend and customize components
+### 1. Get Stack Auth Credentials
 
-## Next Steps (Optional)
+1. Go to [https://app.stack-auth.com](https://app.stack-auth.com)
+2. Create a new project (or select existing)
+3. Go to **API Keys** section
+4. Copy:
+   - Project ID → `NEXT_PUBLIC_STACK_PROJECT_ID`
+   - Publishable Client Key → `NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY`
+   - Secret Server Key → `STACK_SECRET_SERVER_KEY`
 
-- Add more shadcn components as needed (Dialog, Toast, etc.)
-- Implement dark mode toggle
-- Add more interactive components (Dropdown, Select, etc.)
-- Create custom component variants for brand-specific styling
+### 2. Enable Google OAuth
+
+1. In Stack Auth dashboard, go to **Auth Methods** in the sidebar
+2. Click **Add SSO Providers** and select **Google**
+3. Either:
+   - Use Stack's shared development keys (shows Stack logo on OAuth page)
+   - Or configure your own Google OAuth credentials:
+     1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+     2. Create OAuth 2.0 credentials
+     3. Add redirect URI: `https://api.stack-auth.com/api/v1/auth/oauth/callback/google`
+     4. Enter Client ID and Secret in Stack Auth dashboard
+
+### 3. Enable Email/Password Auth
+
+1. In Stack Auth dashboard, go to **Auth Methods**
+2. Enable **Email/Password** authentication
+3. Configure email verification settings as needed
+
+## Database Schema
+
+The Prisma schema includes:
+
+- `User.id` - String (Stack Auth UUID)
+- `User.status` - UserStatus enum (waitlist, user, userPro, admin)
+- `Project.userId` - References the Stack Auth user ID
+- Users are automatically synced from Stack Auth on first login
+
+### UserStatus Enum
+
+```prisma
+enum UserStatus {
+  waitlist
+  user
+  userPro
+  admin
+}
+```
+
+### Run Migrations
+
+```bash
+cd my-site
+npx prisma db push  # For development
+# or
+npx prisma migrate dev --name your-migration-name
+```
+
+**Nov 30, 2025 update:** Consolidated all migrations into a single `20251130000000_init` migration that creates the full Stack Auth-compatible schema from scratch. For fresh databases, run `npx prisma migrate reset --force` or `npx prisma migrate deploy`.
+
+**Single database reminder:** Prisma defines only one datasource (`db`) and it always reads from the env var `DATABASE_URL`. There is no secondary SQLite schema; any historical mentions of `file:./prisma/dev.db` are deprecated and should not be used.
+
+## Key Files
+
+### Authentication Configuration
+
+- `src/stack/client.tsx` - Client-side Stack Auth configuration
+- `src/stack/server.tsx` - Server-side Stack Auth configuration
+- `src/app/handler/[...stack]/page.tsx` - Stack Auth handler routes
+
+### Protected Routes
+
+The middleware (`middleware.ts`) protects all routes except:
+
+- `/_next` - Next.js assets
+- `/handler` - Stack Auth authentication pages
+- `/api/subscribe` - Public subscription endpoint
+- `/` - Landing page
+- `/favicon.ico`
+
+### User Authentication in Components
+
+**Server Components:**
+
+```tsx
+import { stackServerApp } from "@/stack/server";
+
+export default async function MyPage() {
+  const user = await stackServerApp.getUser({ or: "redirect" });
+  // user.id, user.primaryEmail, user.displayName, etc.
+}
+```
+
+**Client Components:**
+
+```tsx
+"use client";
+import { useUser } from "@stackframe/stack";
+
+export default function MyComponent() {
+  const user = useUser();
+  // null if not signed in
+}
+```
+
+### User Button
+
+The header uses Stack Auth's `<UserButton />` component for user menu/logout:
+
+```tsx
+import { UserButton } from "@stackframe/stack";
+
+<UserButton />;
+```
+
+## Authentication Flow
+
+1. User visits protected route
+2. Middleware checks Stack Auth session via `stackServerApp.getUser()`
+3. If not authenticated, redirect to `/handler/sign-in`
+4. Stack Auth handles sign-in (Google SSO or email/password)
+5. On success, user redirected back to original page
+6. User synced to local database on first project creation
 
 ## Development Commands
 
@@ -142,357 +204,175 @@ yarn
 # Start development server
 yarn dev
 
-# Type checking
+# Type checking (strict mode enabled)
 yarn typecheck
 
 # Linting
 yarn lint
+
+# Fix auto-fixable lint issues
+yarn lint:fix
+
+# Database migrations
+npx prisma migrate dev
+
+# View database
+npx prisma studio
 ```
 
-All components are now production-ready with best-in-class UX and developer experience.
+## TypeScript Configuration
 
-## Canvas Layers and Screenshot
+The project uses strict TypeScript settings for better code quality:
 
-### Layered Drawing System
+- `strict: true` - Enables all strict type-checking options
+- `strictNullChecks: true` - Ensures null and undefined are handled explicitly
+- `strictFunctionTypes: true` - Enables strict function type checking
+- `noImplicitAny: true` - Requires explicit types (no implicit any)
+- `noImplicitReturns: true` - Ensures all code paths return a value
+- `noFallthroughCasesInSwitch: true` - Prevents unintentional case fallthrough
+- `forceConsistentCasingInFileNames: true` - Enforces consistent file naming
 
-- Layers: Each canvas now contains an ordered list of layers `{ id, name, visible, strokes[] }`.
-- Active layer: Only the active layer receives draw/erase interactions; hidden layers are not drawn nor captured in screenshots.
-- Strokes: Each stroke is a polyline with `{ points: number[], color: string, size: number, erase: boolean }`.
-- State management: A reducer manages actions for adding/removing/selecting layers, toggling visibility, renaming, clearing, and adding strokes to the active layer.
+## ESLint Configuration
 
-#### Undo/Redo — NEW
+The project uses ESLint with TypeScript support:
 
-- History: The board now maintains `past[]` and `future[]` snapshots (layers and activeLayerId only) to support undo/redo.
-- Undoable actions: layer add/remove/select/toggle-visibility/rename/reorder, stroke add, image layer add, move layer, set image bounds, ensure active vector layer, clear active/all.
-- Non-undoable actions: mode/color/brush size changes, data load, and composite updates.
-- UI: Added Undo/Redo buttons in the Actions card. They are disabled when not applicable.
+- **Unused Variables**: Errors for unused imports/variables (prefix with `_` to ignore)
+- **Type Safety**: Warnings for `any` usage and unsafe operations
+- **Null Safety**: Warnings for nullish coalescing and optional chaining opportunities
+- **Best Practices**: Enforces `const`, disallows `var`, strict equality checks
 
-#### Reducer Extraction — NEW
+## Nano-Banana Pro Endpoint Routing
 
-- The reducer moved from `src/components/canvasUtils.ts` to `src/components/canvasBoardReducer.ts` for clearer separation of concerns.
-- `CanvasBoard.tsx` imports the reducer from `canvasBoardReducer.ts` and now includes history in `BoardState` and `UNDO/REDO` in `BoardAction`.
+The `/api/nano-banana` endpoint routes to different FAL AI endpoints based on user status:
 
-#### Performance Optimizations — NEW
+### Endpoint Routing Logic
 
-- 30fps scheduler: Canvas redraws are gated by a requestAnimationFrame scheduler targeting 30fps to reduce jank under load.
-- Event throttling: Pointer move and resize paths no longer trigger immediate redraw; they request a scheduled frame.
-- Image caching: Images are preloaded and cached; redraw is requested onload only.
-- Stroke thinning: During pointer move, closely spaced points (< 1px) are dropped to minimize path density without visible loss.
-- Non-mutating UI transforms: Layer list uses `[...layers].reverse()` to avoid mutating state during render.
-- Reorder layers: DnD reorders top→bottom in UI, mapped to bottom→top for reducer/renderer.
+- **Pro Endpoint** (`fal-ai/nano-banana-pro/edit`): Used for users with `userPro` or `admin` status
+- **Standard Endpoint** (`fal-ai/nano-banana/edit`): Used for all other users (`waitlist`, `user`)
 
-#### Drag-and-Drop Layer Reordering — NEW
+### Implementation Files
 
-- UI: Layers card supports drag-and-drop reordering using dnd-kit.
-- Order semantics: The UI shows the top-most layer at the top of the list. Dragging changes the visual order to match canvas rendering.
-- Rendering: Canvas draws from bottom to top; the reducer stores layers in bottom→top order internally.
-- New action: `REORDER_LAYERS` updates the reducer with the new order while preserving unknown ids safely.
-- Adding layers: New vector/image layers are added to the top of the stack and appear at the top of the list.
+- `src/lib/fal.ts` - Contains `runNanoBananaEdit` function with `usePro` parameter
+- `src/app/api/nano-banana/route.ts` - Syncs user, checks status, and routes accordingly
 
-### Background Layer — NEW
+### How It Works
 
-- A non-draggable Background layer is always at the bottom of the stack.
-- Default color is white (`#ffffff`).
-- The background row shows a color picker. Changing it updates the canvas immediately.
-- Background can be deleted; if removed and no other background exists, a new white background will be added automatically on next load.
-- Background does not participate in hit-testing for move interactions.
-- Background renders first and is included in screenshots/composites.
+1. User makes request to `/api/nano-banana`
+2. Stack Auth verifies authentication
+3. User is synced to database via `syncUserToDatabase()`
+4. User status is checked with `hasProAccess()` function
+5. Request is routed to appropriate FAL endpoint based on status
 
-### Persistence
+---
 
-- Serialization: Canvas data is saved as `{ layers: Layer[] }` to `Project.data`.
-- Legacy support: If legacy JSON is an array of strokes, it is loaded as a single visible layer named "Layer 1".
+## Security Audit (Nov 30, 2025)
 
-### Screenshot (Composite) & Download
+### Security Features Implemented
 
-- Function: `getCanvasScreenshot(layers, width, height)` composes visible layers into a single PNG data URL, honoring transparency and brush/erase operations.
-- UI: A "Screenshot" button stores the latest composite image in memory and previews it beneath the layer controls. A "Download PNG" button saves the latest composite to disk as `canvas-YYYYMMDD-hhmmss.png`.
+1. **Authentication & Authorization**
 
-#### Device Pixel Ratio (DPR) Fix — NEW
+   - Stack Auth (Neon Auth) for authentication
+   - Role-based access control: waitlist, user, userPro, admin
+   - All protected routes verified in middleware
+   - Admin routes require admin status
 
-- **Issue**: Screenshots were capturing double the canvas region on iPad/mobile devices due to automatic DPR scaling.
-- **Root Cause**: The `getCanvasScreenshotAsync` function was receiving CSS pixel dimensions but internally scaling by device pixel ratio (DPR=2 on retina displays), resulting in 2x larger output images.
-- **Solution**: Added explicit `dprInput: 1` parameter to all screenshot functions to force consistent 1:1 pixel ratio across all devices:
-  - `captureScreenshot()` - For composite preview
-  - `downloadComposite()` - For PNG download
-  - `onGenerateBanana()` - For AI generation input
-- **Result**: Screenshots now capture the exact canvas region consistently across desktop, tablet, and mobile devices.
+2. **Rate Limiting**
 
-### Canvas Flash on Brush/Color Change — FIXED
+   - `/api/nano-banana` - 10 requests/minute per IP
+   - `/api/subscribe` - 5 requests/minute per IP
+   - Supports Upstash Redis (production) and in-memory (development)
 
-- Issue: Changing brush size or stroke color caused the canvas to briefly clear/flash.
-- Root cause: `resizeCanvas()` was indirectly triggered by brush/color state changes, resizing the canvas element and clearing its pixel buffer.
-- Fix: Decoupled resize from style updates. `resizeCanvas()` now runs only on actual layout/DPR changes. A separate effect updates `ctx.lineWidth` and `ctx.strokeStyle` and requests a redraw without resizing.
-- Result: No flash when adjusting brush size or color; smooth redraws at the scheduled frame rate.
+3. **Security Headers** (via `next.config.ts`)
 
-### Touch and Apple Pencil Support — UPDATED
+   - `X-Frame-Options: DENY` - Prevents clickjacking
+   - `X-Content-Type-Options: nosniff` - Prevents MIME type sniffing
+   - `Referrer-Policy: strict-origin-when-cross-origin`
+   - `X-XSS-Protection: 1; mode=block`
+   - `Permissions-Policy` - Disables camera, microphone, geolocation
 
-- Behavior: Drawing now works with Apple Pencil and finger touch on iPad and other touch devices.
-- Root cause previously: `onPointerDown` ignored `pointerType === "touch"`, allowing only `mouse` and `pen`.
-- Change: Accept `touch` pointers and only enforce `button === 0` for `mouse`.
-- Code location: `src/components/CanvasBoard.tsx` in the `onPointerDown` handler.
-- Additional detail: The canvas retains `touch-action: none` via the `touch-none` class to prevent browser gestures from interfering with drawing.
+4. **Data Protection**
 
-### Image Uploads & Cloudinary
+   - Prisma ORM for SQL injection prevention
+   - Projects scoped to owner (userId checks on all queries)
+   - Cloudinary signing with parameter allowlist
+   - API keys returned from server, not hardcoded in client
 
-- Upload: An "Upload Image" button lets you pick an image file; it becomes a top image layer with an `img` badge. Image layers persist in project data like vector layers.
-- Aspect Ratio Preservation: Uploaded images automatically preserve their original aspect ratio while fitting within the canvas bounds. Images are centered and scaled to fit the available space without distortion.
-- Cloudinary: Client-side unsigned uploads are supported.
-  - Cloud name: `dqyx4lyxn`
-  - Configure env var `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` with your unsigned preset name
-  - If not configured, a local object URL is used as a fallback for immediate display (not uploaded).
+5. **Environment Variables**
+   - `DATABASE_URL` - PostgreSQL connection
+   - `NEXT_PUBLIC_STACK_PROJECT_ID` - Stack Auth project
+   - `NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY` - Stack Auth client key
+   - `STACK_SECRET_SERVER_KEY` - Stack Auth secret (server-only)
+   - `CLOUDINARY_URL` - Cloudinary credentials
+   - `FAL_KEY` - FAL AI API key
+   - `ADMIN_EMAIL` - Admin user email (optional, defaults to michael.s.bergin@gmail.com)
+   - `UPSTASH_REDIS_REST_URL` - Redis for rate limiting (optional)
+   - `UPSTASH_REDIS_REST_TOKEN` - Redis auth token (optional)
 
-Signed uploads (fallback when no unsigned preset):
+## Code Review Summary (Nov 2024)
 
-- Server route: `POST /api/cloudinary/sign` returns a signature for upload params.
-- The client calls this route and posts to Cloudinary with `api_key`, `timestamp`, and `signature`.
-- Requires `.env.local` with `CLOUDINARY_URL=cloudinary://<API_KEY>:<API_SECRET>@dqyx4lyxn`.
+### Fixed Issues
 
-### Nano-Banana Generate
+1. **Unused Imports**: Removed unused `NextResponse` import in logout route and `redirect` in projects page
+2. **NoZoom Component**: Fixed unused `touchPoints` variable and replaced `any` types with proper `SafariTouchEvent` interface
+3. **TypeScript Config**: Enhanced with stricter settings while maintaining build compatibility
 
-- Generate button: Posts the current composite to `/api/nano-banana` with a prompt.
-- Prompt input: A shadcn `Input` labeled "Prompt" allows changing the text sent to generation. Default placeholder is `banana-fy` and initial value is `banana-fy`.
-- Result: The returned image URL is added as a topmost image layer with a yellow "banana" badge. Image layers are persisted in the same `layers` array with `{ type: "image", imageSrc, banana }`.
+### Architecture Notes
 
-#### Banana AI Loading Overlay — NEW
+- **Authentication**: Uses Stack Auth (Neon Auth) with Google SSO and email/password support
+- **Database**: PostgreSQL via Prisma with proper user/project relationships
+- **Rate Limiting**: Supports both Upstash Redis (production) and in-memory (development)
+- **Image Generation**: FAL AI integration with Cloudinary for image storage
+- **Canvas**: Multi-layer drawing system with undo/redo, image uploads, and AI generation
 
-- Behavior: While generation is in progress, a full-viewport loading overlay displays a radial array of spinning bananas orbiting a pulsing center banana.
-- Trigger: Overlay shows when `isGenerating === true` inside `CanvasBoardControls` (driven by `onGenerateBanana()` in `CanvasBoard.tsx`).
-- Implementation:
-  - Rendered via a portal to `document.body` with `z-[9999]` to avoid stacking context issues.
-  - Positioning (`translate(-50%, -50%)`) is separated from rotation by nesting an inner element with `animate-spin`, ensuring transforms do not conflict.
-  - Smooth staggered animation: 12 bananas, 0.1s delay increments, 2s duration, ease-in-out, infinite.
-- Files:
-  - `src/components/CanvasBoard.tsx` (sets `isGenerating` around the async call)
-  - `src/components/CanvasBoardControls.tsx` (renders overlay when `state.isGenerating`)
+## Testing Authentication
 
-### Canvas Controls Extraction (CanvasBoardControls) ✅ COMPLETED
+1. Start dev server: `yarn dev`
+2. Visit `http://localhost:3000`
+3. Try to access `/projects` - should redirect to sign-in
+4. Sign in with Google or create email account
+5. You should be redirected back and able to access protected pages
 
-**Goal**: Move all canvas overlay controls and user-triggered actions out of `src/components/CanvasBoard.tsx` into `src/components/CanvasBoardControls.tsx`, keeping DOM/drawing/persistence in `CanvasBoard`.
+---
 
-**Status**: ✅ Complete - All UI controls have been successfully extracted to CanvasBoardControls.tsx
+## Previous Documentation
 
-**Changes Made**:
+### 🚨 CRITICAL: No-Zoom Full-Frame Application Requirement
 
-- ✅ Created complete CanvasBoardControls.tsx with all features from CanvasBoard.tsx
-- ✅ Added all missing actions: download, upload, banana prompt, layer management
-- ✅ Implemented left-aligned single column layout matching original design
-- ✅ Added proper TypeScript types for state and actions
-- ✅ Included banana badge display and all layer functionality
-- ✅ Removed entire legacy left-hand menu from CanvasBoard.tsx
-- ✅ Cleaned up unused imports and callback functions
-- ✅ Fixed all linting errors
+This application MUST maintain a full-frame, full-page experience with ABSOLUTELY NO ZOOM functionality allowed.
 
-**API**:
+#### Implementation Details
 
-- Props: `{ state, actions }`
-- `state`: `{ mode, strokeColor, brushSize, layers, activeLayerId, compositeDataUrl, isGenerating }`
-- `actions`: `{ addLayer, removeLayer, selectLayer, toggleLayerVisibility, setMode, setColor, setBrushSize, clearActive, clearAll, captureComposite, generateBanana }`
+1. **Viewport Configuration** (`layout.tsx`)
 
-Boundaries:
+   - `initialScale: 1` - Sets default zoom to 100%
+   - `maximumScale: 1` - Prevents zoom beyond 100%
+   - `userScalable: false` - Disables user zoom entirely
+   - `viewportFit: "cover"` - Ensures full viewport coverage
 
-- Controls are DOM-agnostic (no refs, no canvas ops).
-- `CanvasBoard` retains reducer, pointer handlers, draw/resize, persistence.
+2. **NoZoom Component** (`components/NoZoom.tsx`)
 
-Steps:
+   - Blocks Safari pinch gestures
+   - Prevents Ctrl/Cmd + wheel zoom
+   - Disables keyboard zoom shortcuts
 
-1. Created `CanvasBoardControls.tsx` with typed props and shadcn/ui minimal UI.
-2. Integrated into `CanvasBoard.tsx` and passed memoized action callbacks.
-3. Removed inline overlay controls from `CanvasBoard.tsx`.
-4. Preserved brush clamping and `resizeCanvas()` in board callbacks.
+3. **CSS-Level Prevention** (`globals.css`)
+   - `text-size-adjust: 100%`
+   - `touch-action: none` globally
+   - `overscroll-behavior: none`
+   - All input elements forced to `font-size: 16px !important`
 
-Acceptance:
+### Canvas Features
 
-- Feature parity: draw/erase, color/size, layers (add/remove/select/visibility), clear active/all, screenshot preview, banana generate, persistence.
-- No new type/ESLint errors; no perf regressions.
+- Multi-layer drawing system with undo/redo
+- Image uploads via Cloudinary
+- AI image generation via FAL
+- Project thumbnails with periodic auto-capture
+- Drag-and-drop layer reordering
 
-### Controls Layout Update (Left/Right Columns)
+### UI Components
 
-- Left column (top-left overlay): `Tools`, `Actions` (Clear Active, Clear All, Screenshot), and conditional `Preview`.
-- Right column (center-right overlay): `Layers` list and a dedicated `Generate` card with the Generate button.
-- Rationale: keeps drawing affordances on the left while moving workflow/layer management to the right, minimizing hand travel and creating a balanced canvas workspace.
-- Implementation: `CanvasBoardControls.tsx` renders two absolutely positioned stacks:
-  - Left: `left-4 top-4 flex-col gap-4`
-  - Right: `right-4 top-1/2 -translate-y-1/2 flex-col gap-4`
-  - Generate button moved out of Actions and into a new right-side "Generate" card.
+Built with shadcn/ui components:
 
-#### GenerateControls vertical spacing — NEW
-
-- Adjusted section structure and spacing to ensure consistent separation:
-  - Prompt, Shortcuts, and Transform are now direct siblings wrapped in a `div.space-y-4`.
-  - Prompt block retains `space-y-1` for label→input proximity.
-  - Shortcuts remain a two-column grid with `gap-1`.
-  - File: `src/components/GenerateControls.tsx`.
-
-## Creation Flow & Header Updates
-
-### Quick Create (Untitled)
-
-- A quick-create icon is now in the header next to the `Banananano` brand.
-- Clicking it navigates to `/new`, which performs the project creation and redirects to `/create?id=<projectId>`.
-- File: `src/components/Header.tsx` routes to `/new` for consistent behavior with the left menu.
-
-### Centered Project Name in Header
-
-- When a project is loaded, its name appears centered in the header.
-- Files: `src/components/Header.tsx` (absolute center overlay), consumed via `AppShell` props from project pages.
-
-#### Inline Rename (Click-to-Edit) — NEW
-
-- Click the centered project title in the header to rename it inline.
-- Editing UX:
-  - Enter submits, Escape cancels, Blur submits.
-  - Optimistic update with a background `PATCH /api/projects/[id]` of `{ name }`.
-  - On success, the header refreshes via `router.refresh()` to stay in sync.
-  - Disabled while saving; reverts on error.
-- Implementation details in `src/components/Header.tsx`:
-  - Local state: `isEditingName`, `pendingName`, `isSavingName` with input `ref` for focus/select.
-  - Keeps `pendingName` synchronized with incoming `projectName` prop changes.
-  - Only enabled when `projectId` is present.
-
-### Create Page Uses Project Context
-
-- `/create` now requires a `?id=<projectId>` query param, validates auth, loads the project, and renders `ProjectCanvas` with persistence.
-- File: `src/app/create/page.tsx`.
-- Behavior mirrors `projects/[id]` page: saves canvas to `PATCH /api/projects/[id]`.
-
-### New Project Route Behavior
-
-- `/new` auto-creates an `untitled` project on mount and redirects to `/create?id=<projectId>`.
-- File: `src/app/new/page.tsx`.
-
-### Navigation Summary
-
-- Links: `New Project` (`/new`), `Create` (`/create?id=...`), `Projects` (`/projects`).
-- Header brand area includes a quick-create icon for fast entry to a new canvas.
-
-## Project Thumbnails & Periodic Screenshots — NEW
-
-- Canvas container refactor — NEW
-
-- Introduced `src/components/CanvasBoardContainer.tsx` to wrap the board without `Card` padding (`p-0`) and remove extra top/bottom space. Replaced `Card/CardContent` wrappers in `src/app/projects/[id]/page.tsx` and `src/app/create/page.tsx` with this container.
-
-### Schema
-
-- Added `Project.screenshotUrl?: string` to persist a thumbnail for each project.
-
-### API
-
-- `PATCH /api/projects/[id]` accepts `{ data?, name?, screenshotUrl? }` and only updates fields that are explicitly provided.
-  - Prevents unintentionally nulling `data` during screenshot-only updates.
-- Cloudinary signing route now allows `overwrite`/`invalidate` parameters for idempotent uploads.
-
-### Client Behavior
-
-- `ProjectCanvas` parses saved canvas `layers` and, every 5 minutes (and shortly after mount), captures a composite screenshot using `getCanvasScreenshotAsync(layers, width, height, 1)`, uploads it to Cloudinary under a stable `public_id` of `projects/<id>/thumbnail` with `overwrite` enabled, and PATCHes the resulting `secure_url` to the project.
-- Uses unsigned uploads when `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` is set; falls back to signed uploads via `/api/cloudinary/sign` otherwise.
-
-### UI
-
-- `Projects` page shows a project thumbnail at the top of each card when `screenshotUrl` is present, using an `aspect-video` container with `object-cover`.
-- Thumbnails append a cache-busting query param based on `updatedAt` (`?t=<ms>`), ensuring fresh images after periodic capture or generation.
-- Added remote image domains for Cloudinary in `next.config.ts`.
-
-### Scrolling Behavior — FIXED
-
-- The `Projects` page now properly supports vertical scrolling within the content area.
-- Key changes made:
-  - **AppShell**:
-    - Changed from `min-h-dvh` to `h-dvh` for exact viewport height
-    - Added `overflow-hidden` to the wrapper div to contain child scrolling
-    - Maintains `min-h-0` on main element for proper flex calculations
-  - **Projects Page**:
-    - Added `min-h-0` to both the outer flex container and scrollable div
-    - Header section uses `flex-shrink-0` to maintain fixed height
-    - Projects grid container uses `flex-1 min-h-0 overflow-y-auto` for proper scrolling
-    - Link components have `block h-full` class to maintain proper height flow
-    - Cards have `h-full` to fill their grid cells properly
-    - Added `pb-8` to the grid to prevent bottom clipping
-- Result: The page header remains fixed while the projects grid scrolls independently with proper height constraints throughout the component tree.
-
-### Notes
-
-- DPR is forced to 1 for consistent screenshot sizing across devices.
-- Uploads overwrite previous thumbnails to keep URLs stable per project.
-
-## Security Hardening — NEW
-
-- Auth cookie now sets `secure` in production and remains `httpOnly` with `sameSite: "lax"`.
-- `/api/cloudinary/sign` now requires a valid auth cookie (JWT verified server-side) before signing params.
-- `/api/nano-banana` now requires auth and applies in-memory rate limiting.
-- Rate limiting added:
-  - Login: 5 requests/min per IP returns 429 when exceeded.
-  - Nano-banana: 10 requests/min per IP returns 429 when exceeded.
-- Env requirements:
-  - `AUTH_SECRET` must be set for JWT signing/verification.
-  - `FAL_KEY` must be set for AI image generation.
-  - `CLOUDINARY_URL` must be set for signed uploads (fallback when no unsigned preset).
-- Notes:
-  - Middleware already blocks unauthenticated access globally except whitelisted routes; per-route auth checks provide defense-in-depth.
-  - Rate limiting is in-memory and best-effort; consider a distributed limiter (e.g., Upstash) for production scale.
-
-## Prompt Shortcuts — NEW
-
-Kid-friendly prompt shortcuts were added to `src/components/GenerateControls.tsx` to help ages 4–10 enhance sketches quickly. Each shortcut sets the prompt field; users can tweak and then press Generate.
-
-Shortcuts:
-
-- Magic Colors (Sparkles): make the drawing pop with bright, bold colors and gentle glow, keep shapes clear for kids
-- Clean Lines (Paintbrush): neaten sketch lines, smooth edges, cartoon style, keep original idea and layout
-- Sparkly Stars (Stars): add cute sparkly stars and soft shine around the main subject
-- Rainbow (Rainbow): add a cheerful rainbow and soft clouds in the background
-- Sunny Day (Sun): bright blue sky, puffy clouds, warm sunshine, happy colors
-- Night Sky (Moon): cozy night sky with gentle moon and friendly twinkling stars
-- Flower Garden (Flower): add colorful flowers and soft grass, friendly storybook style
-- Castle (Castle): add a cute fairytale castle in the distance, bright and simple
-- Rocket Ship (Rocket): add a playful rocket ship and stars, fun space adventure vibe
-- Animal Friends (Dog): add friendly animal friends (puppy, kitten, bunny) smiling, simple cartoon style
-- Undersea (Fish): make a cheerful undersea scene with fish and bubbles, bright colors
-- Clouds (Cloud): add soft fluffy clouds around, gentle storybook look
-- Magic Sparkles (Wand2): sprinkle magic sparkles and gentle glow around the drawing
-- Cute Bugs (Bug): add tiny cute bugs (ladybugs, butterflies) with friendly faces
-- Kitty (Cat): add a cute kitty with big eyes, soft fur, friendly smile
-- Banana Fun (Banana): banana-fy this image with banana characters and fun yellow themes
-
-UI:
-
-- Layout order: Shortcuts → Prompt input → Transform button
-- Main button now shows "Transform" with Wand2 icon (instead of "Generate Banana Layer" with Banana icon).
-- Shortcuts render as outline buttons in a 2-column grid at the top.
-- Prompt input is positioned between shortcuts and the transform button.
-- Clicking a shortcut replaces the prompt value; disabled during generation.
-- All prompts are bright, safe, and friendly; avoid realistic/scary styles.
-
-## Card Header Styling Alignment — NEW
-
-Unified the styling for collapsible card headers across three control components for consistent UX:
-
-### Components Updated
-
-- `CanvasBoardControls.tsx` (Tools, Actions cards)
-- `LayerControls.tsx` (Layers card)
-- `GenerateControls.tsx` (Banana AI card)
-
-### Design Specifications
-
-#### Collapsed State
-
-- **Format**: Square 16x16 (w-16 h-16) for uniform icon display
-- **Icon**: Centered within the square with no additional text
-- **Interaction**: Entire card becomes clickable to expand
-- **Cursor**: Shows pointer cursor to indicate interactivity
-
-#### Expanded State
-
-- **Padding**: Consistent px-4 py-3 for all headers
-- **Icon Spacing**: gap-2 between icon and title text
-- **Icon Container**: Uses flex-shrink-0 wrapper for consistent sizing
-- **Toggle Button**: Standardized to h-7 w-7 size across all components
-- **Hover States**: Subtle muted/80 background on hover for all buttons
-
-### Implementation Details
-
-- Cards use conditional onClick handlers (only when collapsed)
-- Toggle buttons only appear when expanded (cleaner collapsed state)
-- All transitions use duration-200 for smooth animations
-- Icons maintain consistent sizing through flex-shrink-0 containers
+- Button, Input, Card, Sheet, Label, Form, Badge
+- Consistent theming with CSS custom properties
+- Dark/light mode ready

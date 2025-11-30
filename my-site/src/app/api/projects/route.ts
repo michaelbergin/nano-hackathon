@@ -1,25 +1,30 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyAuthToken } from "@/lib/auth";
-import { cookies } from "next/headers";
+import { stackServerApp } from "@/stack/server";
+import { syncUserToDatabase, hasAppAccess } from "@/lib/userSync";
 
 export async function POST(req: Request) {
   try {
-    // Get user from auth cookie
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth")?.value ?? null;
-    if (!token) {
+    // Get user from Stack Auth
+    const user = await stackServerApp.getUser();
+    if (!user) {
       return NextResponse.json(
         { ok: false, error: "Not authenticated" },
         { status: 401 }
       );
     }
 
-    const payload = await verifyAuthToken(token);
-    if (!payload) {
+    // Sync user to database and check access
+    const dbUser = await syncUserToDatabase({
+      id: user.id,
+      primaryEmail: user.primaryEmail,
+      displayName: user.displayName,
+    });
+
+    if (!dbUser || !hasAppAccess(dbUser.status)) {
       return NextResponse.json(
-        { ok: false, error: "Invalid token" },
-        { status: 401 }
+        { ok: false, error: "Access denied - waitlist" },
+        { status: 403 }
       );
     }
 
@@ -38,7 +43,7 @@ export async function POST(req: Request) {
     const project = await prisma.project.create({
       data: {
         name,
-        userId: payload.userId,
+        userId: user.id,
       },
     });
 

@@ -1,14 +1,10 @@
 import { prisma } from "../src/lib/prisma";
-import bcrypt from "bcryptjs";
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (value == null || value === "") {
-    throw new Error(`Missing required env var: ${name}`);
-  }
-  return value;
-}
-
+/**
+ * Seed script for development/testing
+ * Note: Users are now created through Stack Auth authentication
+ * This script only seeds test data like subscribers
+ */
 async function main(): Promise<void> {
   const isProduction: boolean = process.env.NODE_ENV === "production";
   const allowProduction: boolean = process.env.SEED_ALLOW_PRODUCTION === "true";
@@ -18,22 +14,17 @@ async function main(): Promise<void> {
     );
   }
 
-  const email: string = requireEnv("SEED_EMAIL");
-  const password: string = requireEnv("SEED_PASSWORD");
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  await prisma.user.upsert({
-    where: { email },
-    update: { hashedPassword, role: "superadmin" },
-    create: { email, hashedPassword, role: "superadmin" },
-  });
-
-  // Ensure sample Subscriber exists (optional)
+  // Seed sample subscriber for waitlist testing
+  const testEmail = process.env.SEED_EMAIL ?? "test@example.com";
+  
   await prisma.subscriber.upsert({
-    where: { email },
+    where: { email: testEmail },
     update: {},
-    create: { email },
+    create: { email: testEmail },
   });
+
+  console.log("Seed completed successfully");
+  console.log("Note: Users are created automatically via Stack Auth sign-up");
 }
 
 main()

@@ -140,12 +140,14 @@ export function ProjectCanvas({
             signature?: string;
             params?: Record<string, string>;
             cloudName?: string;
+            apiKey?: string;
           };
           if (
             !signJson.ok ||
             !signJson.signature ||
             !signJson.params ||
-            !signJson.cloudName
+            !signJson.cloudName ||
+            !signJson.apiKey
           ) {
             return;
           }
@@ -153,7 +155,7 @@ export function ProjectCanvas({
             form.append(k, v);
           }
           form.append("signature", signJson.signature);
-          form.append("api_key", "598646243146163");
+          form.append("api_key", signJson.apiKey);
           const up = await fetch(
             `https://api.cloudinary.com/v1_1/${signJson.cloudName}/image/upload`,
             { method: "POST", body: form }
@@ -244,12 +246,14 @@ export function ProjectCanvas({
                 signature?: string;
                 params?: Record<string, string>;
                 cloudName?: string;
+                apiKey?: string;
               };
               if (
                 !signJson.ok ||
                 !signJson.signature ||
                 !signJson.params ||
-                !signJson.cloudName
+                !signJson.cloudName ||
+                !signJson.apiKey
               ) {
                 return;
               }
@@ -257,7 +261,7 @@ export function ProjectCanvas({
                 form.append(k, v);
               }
               form.append("signature", signJson.signature);
-              form.append("api_key", "598646243146163");
+              form.append("api_key", signJson.apiKey);
               const up = await fetch(
                 `https://api.cloudinary.com/v1_1/${signJson.cloudName}/image/upload`,
                 { method: "POST", body: form }

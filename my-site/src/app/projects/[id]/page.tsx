@@ -1,8 +1,8 @@
 import type { JSX } from "react";
 import { prisma } from "@/lib/prisma";
-import { verifyAuthToken } from "@/lib/auth";
-import { cookies } from "next/headers";
+import { stackServerApp } from "@/stack/server";
 import { redirect } from "next/navigation";
+import { syncUserToDatabase, hasAppAccess } from "@/lib/userSync";
 import { AppShell } from "@/components/AppShell";
 import { ProjectCanvas } from "./ProjectCanvas";
 import { CanvasBoardContainer } from "@/components/CanvasBoardContainer";
@@ -21,13 +21,19 @@ export default async function ProjectPage({
     redirect("/projects");
   }
 
-  // Get authenticated user
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth")?.value ?? null;
-  const payload = token ? await verifyAuthToken(token) : null;
+  // Get authenticated user via Stack Auth
+  const user = await stackServerApp.getUser({ or: "redirect" });
 
-  if (!payload) {
-    redirect("/account/login");
+  // Sync user to database and check access
+  const dbUser = await syncUserToDatabase({
+    id: user.id,
+    primaryEmail: user.primaryEmail,
+    displayName: user.displayName,
+  });
+
+  // Redirect waitlist users back to landing page
+  if (!dbUser || !hasAppAccess(dbUser.status)) {
+    redirect("/");
   }
 
   // Get project
@@ -35,7 +41,7 @@ export default async function ProjectPage({
     id: number;
     name: string;
     data: string | null;
-    userId: number;
+    userId: string;
     createdAt: Date;
     updatedAt: Date;
   };
@@ -48,7 +54,7 @@ export default async function ProjectPage({
   ).project.findFirst({
     where: {
       id: projectId,
-      userId: payload.userId, // Ensure user can only access their own projects
+      userId: user.id, // Ensure user can only access their own projects
     },
   });
 

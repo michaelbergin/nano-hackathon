@@ -1011,7 +1011,7 @@ export function CanvasBoard({
       return;
     }
     const visibleLayers = state.layers.filter((l) => l.visible);
-    (async () => {
+    void (async () => {
       const dataUrl = await getCanvasScreenshotAsync(
         visibleLayers,
         Math.max(1, Math.floor(cssW)),
@@ -1095,12 +1095,14 @@ export function CanvasBoard({
           signature?: string;
           params?: Record<string, string>;
           cloudName?: string;
+          apiKey?: string;
         };
         if (
           !signJson.ok ||
           !signJson.signature ||
           !signJson.params ||
-          !signJson.cloudName
+          !signJson.cloudName ||
+          !signJson.apiKey
         ) {
           return null;
         }
@@ -1108,7 +1110,7 @@ export function CanvasBoard({
           form.append(k, v);
         }
         form.append("signature", signJson.signature);
-        form.append("api_key", "598646243146163");
+        form.append("api_key", signJson.apiKey);
         const res = await fetch(
           `https://api.cloudinary.com/v1_1/${signJson.cloudName}/image/upload`,
           {

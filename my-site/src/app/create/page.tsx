@@ -1,10 +1,10 @@
 import type { JSX } from "react";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ProjectCanvas } from "../projects/[id]/ProjectCanvas";
-import { verifyAuthToken } from "@/lib/auth";
+import { stackServerApp } from "@/stack/server";
 import { prisma } from "@/lib/prisma";
+import { syncUserToDatabase, hasAppAccess } from "@/lib/userSync";
 import { CanvasBoardContainer } from "@/components/CanvasBoardContainer";
 
 interface CreatePageProps {
@@ -14,11 +14,19 @@ interface CreatePageProps {
 export default async function CreatePage({
   searchParams,
 }: CreatePageProps): Promise<JSX.Element> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth")?.value ?? null;
-  const payload = token ? await verifyAuthToken(token) : null;
-  if (!payload) {
-    redirect("/account/login");
+  // Get authenticated user via Stack Auth
+  const user = await stackServerApp.getUser({ or: "redirect" });
+
+  // Sync user to database and check access
+  const dbUser = await syncUserToDatabase({
+    id: user.id,
+    primaryEmail: user.primaryEmail,
+    displayName: user.displayName,
+  });
+
+  // Redirect waitlist users back to landing page
+  if (!dbUser || !hasAppAccess(dbUser.status)) {
+    redirect("/");
   }
 
   // Read project id from querystring
@@ -30,7 +38,7 @@ export default async function CreatePage({
 
   // Load project for this user
   const project = await prisma.project.findFirst({
-    where: { id: projectId, userId: payload.userId },
+    where: { id: projectId, userId: user.id },
   });
   if (!project) {
     redirect("/projects");
