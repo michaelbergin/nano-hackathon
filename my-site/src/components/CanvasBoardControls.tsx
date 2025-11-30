@@ -5,6 +5,7 @@ import { memo } from "react";
 import type { BoardMode, Layer } from "./CanvasBoard";
 import LayerControls from "./LayerControls";
 import { GenerateControls } from "./GenerateControls";
+import { MobileDrawer } from "./MobileDrawer";
 import { LoadingAnimation } from "./LoadingAnimation";
 import { Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -211,8 +212,8 @@ function CanvasBoardControlsBase({
       </div>
 
       {/* Bottom-centered Tool Controls */}
-      <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 z-10 w-full flex justify-center px-4">
-        <div className="pointer-events-auto select-none max-w-full overflow-x-auto">
+      <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-full flex justify-center px-4">
+        <div className="pointer-events-auto select-none max-w-full overflow-visible">
           <ToolControls
             mode={state.mode}
             strokeColor={state.strokeColor}
@@ -228,8 +229,8 @@ function CanvasBoardControlsBase({
         </div>
       </div>
 
-      {/* Layers menu at top right */}
-      <div className="pointer-events-none absolute top-4 right-4 z-10">
+      {/* Desktop: Layers menu at top right - hidden on mobile */}
+      <div className="pointer-events-none absolute top-4 right-4 z-10 hidden md:block">
         <div className="pointer-events-auto">
           <LayerControls
             layers={layers}
@@ -250,14 +251,33 @@ function CanvasBoardControlsBase({
         </div>
       </div>
 
-      {/* Banana AI Generation Controls */}
-      <GenerateControls
+      {/* Desktop: Banana AI Generation Controls - hidden on mobile */}
+      <div className="hidden md:block">
+        <GenerateControls
+          isGenerating={state.isGenerating}
+          bananaPrompt={state.bananaPrompt}
+          isCollapsed={state.panelsCollapsed.banana}
+          onGenerateBanana={actions.generateBanana}
+          onSetBananaPrompt={actions.setBananaPrompt}
+          onToggleCollapsed={() => actions.togglePanelCollapsed("banana")}
+        />
+      </div>
+
+      {/* Mobile: Combined drawer for Layers and Generate */}
+      <MobileDrawer
+        layers={layers}
+        activeLayerId={activeLayerId}
+        onAddLayer={layerActions.addLayer}
+        onRemoveLayer={layerActions.removeLayer}
+        onSelectLayer={layerActions.selectLayer}
+        onToggleLayerVisibility={layerActions.toggleLayerVisibility}
+        onClearLayer={layerActions.clearLayer}
+        onReorderLayers={layerActions.reorderLayers}
+        onSetBackgroundColor={layerActions.setBackgroundColor}
         isGenerating={state.isGenerating}
         bananaPrompt={state.bananaPrompt}
-        isCollapsed={state.panelsCollapsed.banana}
         onGenerateBanana={actions.generateBanana}
         onSetBananaPrompt={actions.setBananaPrompt}
-        onToggleCollapsed={() => actions.togglePanelCollapsed("banana")}
       />
     </>
   );

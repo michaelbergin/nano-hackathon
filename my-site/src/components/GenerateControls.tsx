@@ -72,12 +72,15 @@ function CollapsibleCardHeader({
   );
 }
 
-interface GenerateControlsProps {
+export interface GenerateControlsContentProps {
   isGenerating: boolean;
   bananaPrompt: string;
-  isCollapsed: boolean;
   onGenerateBanana: () => Promise<void>;
   onSetBananaPrompt: (prompt: string) => void;
+}
+
+interface GenerateControlsProps extends GenerateControlsContentProps {
+  isCollapsed: boolean;
   onToggleCollapsed: () => void;
 }
 
@@ -468,6 +471,341 @@ export function GenerateControls({
           )}
         </Card>
       </div>
+    </div>
+  );
+}
+
+// Exported content component for use in MobileDrawer
+export function GenerateControlsContent({
+  isGenerating,
+  bananaPrompt,
+  onGenerateBanana,
+  onSetBananaPrompt,
+}: GenerateControlsContentProps): JSX.Element {
+  // Minimal SpeechRecognition typing to avoid relying on non-standard DOM types
+  interface MinimalSpeechRecognitionEventResultItem {
+    transcript: string;
+  }
+  interface MinimalSpeechRecognitionEventResult {
+    isFinal: boolean;
+    0: MinimalSpeechRecognitionEventResultItem;
+  }
+  interface MinimalSpeechRecognitionEvent {
+    results: ArrayLike<MinimalSpeechRecognitionEventResult>;
+  }
+  interface MinimalSpeechRecognition {
+    lang: string;
+    continuous: boolean;
+    interimResults: boolean;
+    onresult: ((event: MinimalSpeechRecognitionEvent) => void) | null;
+    onend: (() => void) | null;
+    onerror: ((event: { error: string }) => void) | null;
+    start: () => void;
+    stop: () => void;
+    abort: () => void;
+  }
+  type MinimalSpeechRecognitionCtor = new () => MinimalSpeechRecognition;
+
+  const getSpeechRecognitionCtor = (): MinimalSpeechRecognitionCtor | null => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    const w = window as unknown as Record<string, unknown>;
+    const Ctor = (w.SpeechRecognition ?? w.webkitSpeechRecognition) as
+      | MinimalSpeechRecognitionCtor
+      | undefined;
+    return Ctor ?? null;
+  };
+
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const recognitionRef = useRef<MinimalSpeechRecognition | null>(null);
+  const promptRef = useRef<string>(bananaPrompt);
+
+  // Custom prompts state
+  const [customPrompts, setCustomPrompts] = useState<CustomPrompt[]>([]);
+  const [isLoadingPrompts, setIsLoadingPrompts] = useState<boolean>(false);
+  const [promptsError, setPromptsError] = useState<string>("");
+
+  const fetchCustomPrompts = useCallback(async (): Promise<void> => {
+    setIsLoadingPrompts(true);
+    setPromptsError("");
+    try {
+      const res = await fetch("/api/prompts");
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.prompts)) {
+        setCustomPrompts(data.prompts);
+      } else if (!data.ok && data.error === "Not authenticated") {
+        setCustomPrompts([]);
+      } else {
+        setPromptsError(data.error ?? "Failed to load prompts");
+      }
+    } catch {
+      setCustomPrompts([]);
+    } finally {
+      setIsLoadingPrompts(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchCustomPrompts();
+  }, [fetchCustomPrompts]);
+
+  useEffect(() => {
+    promptRef.current = bananaPrompt;
+  }, [bananaPrompt]);
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current !== null) {
+        try {
+          recognitionRef.current.abort();
+        } catch {
+          // noop
+        }
+        recognitionRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleMicClick = (): void => {
+    if (isRecording) {
+      if (recognitionRef.current !== null) {
+        try {
+          recognitionRef.current.stop();
+        } catch {
+          // noop
+        }
+      }
+      return;
+    }
+
+    const Ctor = getSpeechRecognitionCtor();
+    if (Ctor === null) {
+      console.warn("Speech recognition is not supported in this browser.");
+      return;
+    }
+
+    const recognition = new Ctor();
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+
+    recognition.onresult = (event: MinimalSpeechRecognitionEvent): void => {
+      let finalTranscript = "";
+      for (let i = 0; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalTranscript += result[0].transcript;
+        }
+      }
+      if (finalTranscript.trim().length > 0) {
+        const base = promptRef.current.trim();
+        const next =
+          base.length > 0 ? `${base} ${finalTranscript}` : finalTranscript;
+        onSetBananaPrompt(next);
+      }
+    };
+
+    recognition.onend = (): void => {
+      setIsRecording(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onerror = (): void => {
+      setIsRecording(false);
+      recognitionRef.current = null;
+    };
+
+    try {
+      recognitionRef.current = recognition;
+      setIsRecording(true);
+      recognition.start();
+    } catch {
+      setIsRecording(false);
+      recognitionRef.current = null;
+    }
+  };
+
+  const shortcuts = useMemo(
+    () => [
+      {
+        key: "magic-colors",
+        label: "Magic Colors",
+        icon: <Sparkles className="h-4 w-4" />,
+        prompt:
+          "make the drawing pop with bright, bold colors and gentle glow, keep shapes clear for kids",
+      },
+      {
+        key: "clean-lines",
+        label: "Clean Lines",
+        icon: <Paintbrush className="h-4 w-4" />,
+        prompt:
+          "neaten sketch lines, smooth edges, cartoon style, keep original idea and layout",
+      },
+      {
+        key: "rainbow",
+        label: "Rainbow",
+        icon: <Rainbow className="h-4 w-4" />,
+        prompt:
+          "if the sketch is a rainbow shape, enrich the sketch, if not, add a cheerful rainbow and soft clouds in the background of the main object",
+      },
+      {
+        key: "sky-day",
+        label: "Sunny Day",
+        icon: <Sun className="h-4 w-4" />,
+        prompt: "bright blue sky, puffy clouds, warm sunshine, happy colors",
+      },
+      {
+        key: "sky-night",
+        label: "Night Sky",
+        icon: <Moon className="h-4 w-4" />,
+        prompt: "cozy night sky with gentle moon and friendly twinkling stars",
+      },
+      {
+        key: "rocket",
+        label: "Rocket Ship",
+        icon: <Rocket className="h-4 w-4" />,
+        prompt: "add a playful rocket ship and stars, fun space adventure vibe",
+      },
+      {
+        key: "animal-friends",
+        label: "Animals",
+        icon: <Dog className="h-4 w-4" />,
+        prompt:
+          "add friendly animal friends (puppy, kitten, bunny) smiling, simple cartoon style",
+      },
+      {
+        key: "undersea",
+        label: "Undersea",
+        icon: <Fish className="h-4 w-4" />,
+        prompt:
+          "make a cheerful undersea scene with fish and bubbles, bright colors",
+      },
+      {
+        key: "clouds",
+        label: "Clouds",
+        icon: <Cloud className="h-4 w-4" />,
+        prompt: "add soft fluffy clouds around, gentle storybook look",
+      },
+      {
+        key: "cute-bugs",
+        label: "Cute Bugs",
+        icon: <Bug className="h-4 w-4" />,
+        prompt:
+          "add tiny cute bugs (ladybugs, butterflies) with friendly faces",
+      },
+      {
+        key: "banana-theme",
+        label: "Banana Fun",
+        icon: <Banana className="h-4 w-4" />,
+        prompt:
+          "banana-fy this image with banana characters and fun yellow themes",
+      },
+    ],
+    []
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Prompt */}
+      <div className="space-y-1">
+        <Label htmlFor="bananaPromptMobile" className="text-sm font-medium">
+          Prompt
+        </Label>
+        <div className="relative">
+          <Textarea
+            id="bananaPromptMobile"
+            placeholder="Make my sketch realistic"
+            value={bananaPrompt}
+            onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
+              onSetBananaPrompt(e.target.value)
+            }
+            className="text-sm resize-none select-text pr-10"
+            rows={2}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={`absolute right-2 top-2 h-6 w-6 p-0 hover:bg-muted ${
+              isRecording ? "text-red-600 animate-pulse" : ""
+            }`}
+            onClick={handleMicClick}
+            disabled={isGenerating}
+            title={isRecording ? "Stop recording" : "Start voice input"}
+            aria-pressed={isRecording}
+          >
+            <Mic className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Styles Section */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label className="text-sm font-medium">Styles</Label>
+          {customPrompts.length > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-5 w-5 p-0"
+              onClick={() => void fetchCustomPrompts()}
+              disabled={isLoadingPrompts}
+              title="Refresh styles"
+            >
+              <RefreshCw
+                className={`h-3 w-3 ${isLoadingPrompts ? "animate-spin" : ""}`}
+              />
+            </Button>
+          )}
+        </div>
+        {promptsError && (
+          <div className="text-xs text-red-500">{promptsError}</div>
+        )}
+        <div className="grid grid-cols-2 gap-1">
+          {/* Custom styles first */}
+          {customPrompts.map((cp) => (
+            <Button
+              key={`custom-${cp.id}`}
+              variant="outline"
+              size="sm"
+              className="justify-start gap-2 text-xs border-yellow-200 bg-yellow-50/50 hover:bg-yellow-100/70 dark:border-yellow-900 dark:bg-yellow-950/30 dark:hover:bg-yellow-900/40"
+              onClick={() => onSetBananaPrompt(cp.prompt)}
+              disabled={isGenerating}
+              title={cp.prompt}
+            >
+              <Star className="h-3.5 w-3.5 text-yellow-500 flex-shrink-0" />
+              <span className="truncate">{cp.title}</span>
+            </Button>
+          ))}
+          {/* Built-in styles */}
+          {shortcuts.map((s) => (
+            <Button
+              key={s.key}
+              variant="outline"
+              size="sm"
+              className="justify-start gap-2 text-xs"
+              onClick={() => onSetBananaPrompt(s.prompt)}
+              disabled={isGenerating}
+              title={s.label}
+            >
+              {s.icon}
+              {s.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Transform */}
+      <Button
+        onClick={onGenerateBanana}
+        disabled={isGenerating}
+        className="w-full bg-yellow-500 hover:bg-yellow-600 text-yellow-950"
+      >
+        <Wand2 className="h-4 w-4 mr-2" />
+        {isGenerating ? "Generating…" : "Transform"}
+      </Button>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import type { JSX, ChangeEvent } from "react";
-import { useId } from "react";
+import { useId, useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Pencil,
@@ -11,6 +11,7 @@ import {
   Move as MoveIcon,
 } from "lucide-react";
 import type { BoardMode } from "./CanvasBoard";
+import { useMobile } from "@/hooks/useMobile";
 
 export interface ToolControlsProps {
   mode: BoardMode;
@@ -24,6 +25,8 @@ export interface ToolControlsProps {
   undo: () => void;
   redo: () => void;
 }
+
+const BRUSH_SIZES = [4, 10, 20] as const;
 
 export default function ToolControls({
   mode,
@@ -41,6 +44,36 @@ export default function ToolControls({
   const isErase = mode === "erase";
   const isMove = mode === "move";
   const colorId = useId();
+  const isMobile = useMobile();
+  const [brushPickerOpen, setBrushPickerOpen] = useState(false);
+  const brushPickerRef = useRef<HTMLDivElement>(null);
+
+  // Close brush picker when clicking outside
+  useEffect(() => {
+    if (!brushPickerOpen) return;
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (
+        brushPickerRef.current &&
+        !brushPickerRef.current.contains(event.target as Node)
+      ) {
+        setBrushPickerOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [brushPickerOpen]);
+
+  const handleBrushSelect = (size: number) => {
+    setBrushSize(size);
+    setBrushPickerOpen(false);
+  };
 
   return (
     <div
@@ -144,35 +177,96 @@ export default function ToolControls({
           className="sr-only"
           aria-label="Brush color"
         />
-        <div className="flex items-center gap-1 p-0.5 rounded-full border bg-muted/40">
-          {([4, 10, 20] as const).map((size) => (
+        {/* Brush size picker - collapsible on mobile */}
+        {isMobile ? (
+          <div ref={brushPickerRef} className="relative">
+            {/* Active brush indicator (tap to expand) */}
             <Button
-              key={size}
               type="button"
               variant="ghost"
               size="icon"
-              onClick={() => setBrushSize(size)}
-              aria-pressed={brushSize === size}
-              title={`${size}px brush`}
-              className={`rounded-full ${
-                brushSize === size
-                  ? "bg-sky-500/20 ring-1 ring-black hover:bg-sky-500/30"
-                  : ""
-              }`}
+              onClick={() => setBrushPickerOpen(!brushPickerOpen)}
+              aria-expanded={brushPickerOpen}
+              aria-haspopup="listbox"
+              title={`${brushSize}px brush - tap to change`}
+              className="rounded-full border bg-muted/40"
             >
-              <span className="sr-only">{size}px</span>
+              <span className="sr-only">{brushSize}px</span>
               <span
                 aria-hidden
                 className="rounded-full"
                 style={{
                   backgroundColor: strokeColor,
-                  width: `${Math.max(4, Math.min(20, size))}px`,
-                  height: `${Math.max(4, Math.min(20, size))}px`,
+                  width: `${Math.max(4, Math.min(20, brushSize))}px`,
+                  height: `${Math.max(4, Math.min(20, brushSize))}px`,
                 }}
               />
             </Button>
-          ))}
-        </div>
+
+            {/* Expanded vertical picker */}
+            {brushPickerOpen && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex flex-col gap-1 p-1.5 rounded-xl border-2 bg-background shadow-xl z-[100] pointer-events-auto">
+                {BRUSH_SIZES.map((size) => (
+                  <Button
+                    key={size}
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleBrushSelect(size)}
+                    aria-pressed={brushSize === size}
+                    title={`${size}px brush`}
+                    className={`rounded-full ${
+                      brushSize === size
+                        ? "bg-sky-500/20 ring-1 ring-black hover:bg-sky-500/30"
+                        : ""
+                    }`}
+                  >
+                    <span className="sr-only">{size}px</span>
+                    <span
+                      aria-hidden
+                      className="rounded-full"
+                      style={{
+                        backgroundColor: strokeColor,
+                        width: `${Math.max(4, Math.min(20, size))}px`,
+                        height: `${Math.max(4, Math.min(20, size))}px`,
+                      }}
+                    />
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 p-0.5 rounded-full border bg-muted/40">
+            {BRUSH_SIZES.map((size) => (
+              <Button
+                key={size}
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setBrushSize(size)}
+                aria-pressed={brushSize === size}
+                title={`${size}px brush`}
+                className={`rounded-full ${
+                  brushSize === size
+                    ? "bg-sky-500/20 ring-1 ring-black hover:bg-sky-500/30"
+                    : ""
+                }`}
+              >
+                <span className="sr-only">{size}px</span>
+                <span
+                  aria-hidden
+                  className="rounded-full"
+                  style={{
+                    backgroundColor: strokeColor,
+                    width: `${Math.max(4, Math.min(20, size))}px`,
+                    height: `${Math.max(4, Math.min(20, size))}px`,
+                  }}
+                />
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

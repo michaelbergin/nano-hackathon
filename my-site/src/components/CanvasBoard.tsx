@@ -1013,7 +1013,7 @@ export function CanvasBoard({
       return;
     }
     const visibleLayers = state.layers.filter((l) => l.visible);
-    (async () => {
+    void (async () => {
       const dataUrl = await getCanvasScreenshotAsync(
         visibleLayers,
         Math.max(1, Math.floor(cssW)),

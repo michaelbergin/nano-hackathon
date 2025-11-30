@@ -106,11 +106,9 @@ function CollapsibleCardHeader({
   );
 }
 
-export interface LayerControlsProps {
+export interface LayerControlsContentProps {
   layers: Layer[];
   activeLayerId: string;
-  isCollapsed: boolean;
-  onToggleCollapsed: () => void;
   onAddLayer: (name?: string) => void;
   onRemoveLayer: (id: string) => void;
   onSelectLayer: (id: string) => void;
@@ -118,6 +116,11 @@ export interface LayerControlsProps {
   onClearLayer: (id: string) => void;
   onReorderLayers: (orderTopToBottom: string[]) => void;
   onSetBackgroundColor?: (id: string, color: string) => void;
+}
+
+export interface LayerControlsProps extends LayerControlsContentProps {
+  isCollapsed: boolean;
+  onToggleCollapsed: () => void;
   onDownload?: () => Promise<void>;
   onUpload?: () => void;
   fileInputRef?: RefObject<HTMLInputElement | null>;
@@ -237,6 +240,89 @@ function LayerControlsBase({
 }
 
 export default LayerControlsBase;
+
+// Exported content component for use in MobileDrawer
+export function LayerControlsContent({
+  layers,
+  activeLayerId,
+  onAddLayer,
+  onRemoveLayer,
+  onSelectLayer,
+  onToggleLayerVisibility,
+  onClearLayer,
+  onReorderLayers,
+  onSetBackgroundColor,
+}: LayerControlsContentProps): JSX.Element {
+  // Display top-most layer first in UI (top -> bottom)
+  const layersTopToBottom = [...layers].reverse();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor)
+  );
+
+  const onDragEnd = (event: DragEndEvent): void => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) {
+      return;
+    }
+    const ids = layersTopToBottom.map((l) => l.id);
+    const oldIndex = ids.indexOf(String(active.id));
+    const newIndex = ids.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+    const nextIds = arrayMove(ids, oldIndex, newIndex);
+    onReorderLayers(nextIds);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={onDragEnd}
+      >
+        <SortableContext
+          items={layersTopToBottom.map((l) => l.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="max-h-[40vh] overflow-y-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent pr-1">
+            <div className="space-y-1">
+              {layersTopToBottom.map((layer) => {
+                const isActive = layer.id === activeLayerId;
+                return (
+                  <SortableLayerRow
+                    key={layer.id}
+                    id={layer.id}
+                    isActive={isActive}
+                    layer={layer}
+                    onSelect={onSelectLayer}
+                    onToggleVisibility={onToggleLayerVisibility}
+                    onRemove={onRemoveLayer}
+                    onClear={onClearLayer}
+                    canRemove={layers.length > 1}
+                    onSetBackgroundColor={onSetBackgroundColor}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        </SortableContext>
+      </DndContext>
+
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onAddLayer()}
+        className="w-full h-9 text-sm font-medium border-dashed hover:border-solid transition-all duration-200 hover:bg-muted/50"
+      >
+        <Plus className="h-4 w-4 mr-2" />
+        Add Layer
+      </Button>
+    </div>
+  );
+}
 
 interface SortableLayerRowProps {
   id: string;
