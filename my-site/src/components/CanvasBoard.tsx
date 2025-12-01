@@ -926,8 +926,55 @@ export function CanvasBoard({
     "Make my sketch realistic"
   );
 
-  // Welcome screen state
-  const [showWelcome, setShowWelcome] = useState<boolean>(true);
+  // Check if initialData has meaningful content (not just empty default layers)
+  const hasExistingContent = (() => {
+    if (!initialData) {
+      return false;
+    }
+    try {
+      const parsed = JSON.parse(initialData) as unknown;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Legacy flat strokes array with content
+        return true;
+      }
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        "layers" in (parsed as Record<string, unknown>)
+      ) {
+        const layers = (parsed as { layers: unknown[] }).layers;
+        if (!Array.isArray(layers)) {
+          return false;
+        }
+        // Check if any layer has meaningful content
+        for (const layer of layers) {
+          const l = layer as {
+            type?: string;
+            strokes?: unknown[];
+            imageSrc?: string;
+          };
+          // Vector layer with strokes
+          if (
+            l.type === "vector" &&
+            Array.isArray(l.strokes) &&
+            l.strokes.length > 0
+          ) {
+            return true;
+          }
+          // Image layer (not background)
+          if (l.type === "image" && typeof l.imageSrc === "string") {
+            return true;
+          }
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+    return false;
+  })();
+
+  // Welcome screen state - don't show if project has existing content
+  const [showWelcome, setShowWelcome] = useState<boolean>(!hasExistingContent);
   const [currentWorkflow, setCurrentWorkflow] = useState<WorkflowType | null>(
     null
   );
