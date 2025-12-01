@@ -74,12 +74,19 @@ export async function POST(req: Request): Promise<NextResponse> {
     const body = await req.json().catch(() => ({}));
     const prompt = typeof body?.prompt === "string" ? body.prompt : "";
     const images = Array.isArray(body?.images) ? body.images : [];
+    // Optional workflow parameter for workflow-specific generations
+    const workflow = typeof body?.workflow === "string" ? body.workflow : null;
 
     if (!prompt) {
       return NextResponse.json(
         { ok: false, error: "Missing prompt" },
         { status: 400 }
       );
+    }
+
+    // Log workflow usage for analytics (optional)
+    if (workflow) {
+      console.log(`[nano-banana] Workflow: ${workflow}, User: ${dbUser.id}`);
     }
 
     // Route to pro endpoint if user is userPro or admin

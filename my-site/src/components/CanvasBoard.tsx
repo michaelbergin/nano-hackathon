@@ -11,6 +11,8 @@ import {
   getCanvasScreenshotAsync,
 } from "./canvasUtils";
 import { boardReducer } from "./canvasBoardReducer";
+import { WelcomeScreen, type WorkflowType } from "./WelcomeScreen";
+import { generateWorkflowPrompt } from "@/lib/generateSystemPrompt";
 // UI components integrated with CanvasBoardControls
 
 export type Point2 = [number, number];
@@ -993,6 +995,29 @@ export function CanvasBoard({
     "Make my sketch realistic"
   );
 
+  // Welcome screen state
+  const [showWelcome, setShowWelcome] = useState<boolean>(true);
+  const [currentWorkflow, setCurrentWorkflow] = useState<WorkflowType | null>(
+    null
+  );
+  // Track pending generation from welcome screen
+  const pendingWelcomeGenerationRef = useRef<{
+    workflow: WorkflowType;
+    prompt: string;
+  } | null>(null);
+
+  // Handler for welcome screen submission
+  const handleWelcomeSubmit = useCallback(
+    (workflow: WorkflowType, prompt: string): void => {
+      setCurrentWorkflow(workflow);
+      setBananaPrompt(prompt);
+      // Mark that we should generate after welcome dismisses
+      pendingWelcomeGenerationRef.current = { workflow, prompt };
+      setShowWelcome(false);
+    },
+    []
+  );
+
   // Essential functions for controls
   const onClearActive = useCallback((): void => {
     dispatch({ type: "CLEAR_ACTIVE_LAYER" });
@@ -1182,10 +1207,18 @@ export function CanvasBoard({
       } catch {
         // ignore upload errors
       }
+      // Use workflow-specific prompt if a workflow is selected
+      const finalPrompt = currentWorkflow
+        ? generateWorkflowPrompt(currentWorkflow, bananaPrompt)
+        : bananaPrompt;
       const res = await fetch("/api/nano-banana", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: bananaPrompt, images: [composite] }),
+        body: JSON.stringify({
+          prompt: finalPrompt,
+          images: [composite],
+          workflow: currentWorkflow,
+        }),
       });
       const json = (await res.json()) as { ok?: boolean; image?: string };
       if (json.ok && typeof json.image === "string" && json.image) {
@@ -1203,7 +1236,28 @@ export function CanvasBoard({
     } finally {
       setIsGenerating(false);
     }
-  }, [isGenerating, state.layers, bananaPrompt, getCssSize, onScreenshot]);
+  }, [
+    isGenerating,
+    state.layers,
+    bananaPrompt,
+    getCssSize,
+    onScreenshot,
+    currentWorkflow,
+  ]);
+
+  // Trigger generation when welcome screen is dismissed with pending generation
+  useEffect(() => {
+    if (!showWelcome && pendingWelcomeGenerationRef.current !== null) {
+      // Clear the pending flag to prevent re-triggering
+      pendingWelcomeGenerationRef.current = null;
+      // Small delay to ensure canvas is rendered and has dimensions
+      const timeoutId = setTimeout(() => {
+        void onGenerateBanana();
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+    return undefined;
+  }, [showWelcome, onGenerateBanana]);
 
   // Create controls state and actions
   const controlsState = {
@@ -1261,6 +1315,9 @@ export function CanvasBoard({
 
   return (
     <div className="relative w-full h-full overflow-hidden">
+      {/* Welcome Screen */}
+      {showWelcome && <WelcomeScreen onSubmit={handleWelcomeSubmit} />}
+
       <div ref={containerRef} className="absolute inset-0">
         <canvas
           ref={canvasRef}
@@ -1274,19 +1331,21 @@ export function CanvasBoard({
         />
       </div>
 
-      {/* Canvas Controls */}
-      <CanvasBoardControls
-        state={controlsState}
-        actions={controlsActions}
-        fileInputRef={fileInputRef}
-        layers={state.layers}
-        activeLayerId={state.activeLayerId}
-        layerActions={layerActions}
-        layersPanelCollapsed={panelsCollapsed.layers}
-        onToggleLayersPanel={() => {
-          setPanelsCollapsed((prev) => ({ ...prev, layers: !prev.layers }));
-        }}
-      />
+      {/* Canvas Controls - only show when welcome screen is dismissed */}
+      {!showWelcome && (
+        <CanvasBoardControls
+          state={controlsState}
+          actions={controlsActions}
+          fileInputRef={fileInputRef}
+          layers={state.layers}
+          activeLayerId={state.activeLayerId}
+          layerActions={layerActions}
+          layersPanelCollapsed={panelsCollapsed.layers}
+          onToggleLayersPanel={() => {
+            setPanelsCollapsed((prev) => ({ ...prev, layers: !prev.layers }));
+          }}
+        />
+      )}
 
       {/* Hidden file input for upload functionality */}
       <input

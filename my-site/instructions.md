@@ -621,3 +621,76 @@ Custom styles are displayed in a unified "Styles" section in the Banana AI gener
 - **Graceful fallback**: If user is not authenticated, only built-in styles are shown
 
 This allows users to use their saved styles directly from the canvas without navigating to the styles management page.
+
+---
+
+## Welcome Screen Workflows (Nov 30, 2025)
+
+A new welcome screen guides users through three workflow types when first opening the canvas. Each workflow has unique system prompts optimized for different creative goals.
+
+### Overview
+
+The welcome screen appears on first load of `CanvasBoard` and presents three workflow cards:
+
+1. **I want to draw...** - Generates traceable coloring book-style backgrounds for students to trace over
+2. **I want to learn...** - Visual learning with educational explanations
+3. **I want to explore...** - Creative exploration with imaginative transformations
+
+### Components
+
+#### WelcomeScreen (`src/components/WelcomeScreen.tsx`)
+
+- Three workflow cards with placeholder thumbnails
+- Each workflow has selectable option chips:
+  - **Draw**: Fish, People, Buildings
+  - **Learn**: Times Tables, Division, Addition, Reading
+  - **Explore**: Anything
+- Prompt textarea with voice input (mic button)
+- Submit button to start creating
+
+#### Workflow System Prompts (`src/lib/generateSystemPrompt.ts`)
+
+Three workflow-specific system prompts:
+
+- **draw**: Generates traceable coloring book-style images with clean halftone/line-art outlines on white backgrounds, simple and easy for children to trace
+- **learn**: Creates clear, educational visual explanations with bright colors and simple visual metaphors
+- **explore**: Enables creative exploration with magical, surprising, and whimsical transformations
+
+New exports:
+
+- `generateWorkflowPrompt(workflow, userPrompt)` - Combines workflow system prompt with user input
+- `validateWorkflowPrompt(prompt, workflow)` - Validates prompt contains workflow system prompt
+- `getWorkflowSystemPrompt(workflow)` - Returns raw system prompt for a workflow type
+
+### Integration
+
+#### CanvasBoard Changes
+
+- Added `showWelcome` state (default: true)
+- Added `currentWorkflow` state to track selected workflow
+- `handleWelcomeSubmit` callback dismisses welcome screen, sets workflow and prompt
+- `onGenerateBanana` now uses `generateWorkflowPrompt` when a workflow is selected
+- Canvas controls hidden while welcome screen is visible
+
+#### API Route Updates (`src/app/api/nano-banana/route.ts`)
+
+- Accepts optional `workflow` parameter in request body
+- Logs workflow usage for analytics
+
+### User Flow
+
+1. User opens canvas → sees welcome screen
+2. Selects a workflow card (e.g., "I want to draw...")
+3. Picks an option chip (e.g., "Fish") → prompt auto-fills
+4. Optionally edits the prompt or uses voice input
+5. Clicks "Start Creating" → welcome screen dismisses
+6. Canvas appears ready for drawing
+7. After drawing, user clicks "Transform" → generation uses workflow-specific system prompt
+
+### Design
+
+- Full-screen overlay with gradient background (amber/yellow tones)
+- Responsive: 3-column on desktop, stacked on mobile
+- Selected workflow highlighted with yellow ring and shadow
+- Matches existing UI aesthetic (yellow accents, rounded corners)
+- Placeholder thumbnails show workflow icons (will be replaced with GIFs later)
