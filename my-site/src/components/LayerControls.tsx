@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import CollapsedControl from "./CollapsedControl";
+import { CollapsedControl } from "./CollapsedControl";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -126,7 +126,7 @@ export interface LayerControlsProps extends LayerControlsContentProps {
   fileInputRef?: RefObject<HTMLInputElement | null>;
 }
 
-function LayerControlsBase({
+export function LayerControlsBase({
   layers,
   activeLayerId,
   isCollapsed,
@@ -238,8 +238,6 @@ function LayerControlsBase({
     />
   );
 }
-
-export default LayerControlsBase;
 
 // Exported content component for use in MobileDrawer
 export function LayerControlsContent({

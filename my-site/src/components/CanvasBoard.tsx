@@ -2,7 +2,7 @@
 
 import type { JSX, ChangeEvent } from "react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import CanvasBoardControls from "./CanvasBoardControls";
+import { CanvasBoardControls } from "./CanvasBoardControls";
 import {
   createLayer,
   createBackgroundLayer,
@@ -942,6 +942,11 @@ export function CanvasBoard({
   const handleWelcomeSubmit = useCallback(
     (workflow: WorkflowType, prompt: string): void => {
       setCurrentWorkflow(workflow);
+      // "explore" workflow starts from scratch - no generation, just show canvas
+      if (workflow === "explore") {
+        setShowWelcome(false);
+        return;
+      }
       setBananaPrompt(prompt);
       // Mark that we should generate after welcome dismisses
       pendingWelcomeGenerationRef.current = { workflow, prompt };

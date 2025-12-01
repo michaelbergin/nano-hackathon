@@ -118,5 +118,3 @@ export function CollapsedControl({
     </div>
   );
 }
-
-export default CollapsedControl;

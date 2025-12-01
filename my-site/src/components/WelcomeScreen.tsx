@@ -17,14 +17,17 @@ import {
   Divide,
   Plus,
   BookOpen,
-  Sparkles,
   Wand2,
   Mic,
 } from "lucide-react";
 import { useMobile } from "@/hooks/useMobile";
 
 // Re-export types from centralized location for backward compatibility
-export type { WorkflowType, WorkflowOption, WorkflowConfig } from "@/types/workflow";
+export type {
+  WorkflowType,
+  WorkflowOption,
+  WorkflowConfig,
+} from "@/types/workflow";
 
 // Import types for local use
 import type { WorkflowType, WorkflowConfig } from "@/types/workflow";
@@ -97,18 +100,10 @@ const WORKFLOWS: WorkflowConfig[] = [
   },
   {
     type: "explore",
-    title: "I want to explore...",
-    subtitle: "Let your imagination run wild",
+    title: "Start from scratch",
+    subtitle: "A blank canvas to explore",
     icon: <Compass className="h-8 w-8" />,
-    options: [
-      {
-        key: "anything",
-        label: "Anything",
-        icon: <Sparkles className="h-4 w-4" />,
-        defaultPrompt:
-          "transform my drawing into something magical and surprising",
-      },
-    ],
+    options: [],
   },
 ];
 
@@ -245,11 +240,16 @@ export function WelcomeScreen({ onSubmit }: WelcomeScreenProps): JSX.Element {
 
   const handleWorkflowSelect = useCallback(
     (workflowType: WorkflowType): void => {
+      // "explore" type goes directly to canvas with no prompt
+      if (workflowType === "explore") {
+        onSubmit("explore", "");
+        return;
+      }
       setSelectedWorkflow(workflowType);
       setSelectedOption(null);
       setPrompt("");
     },
-    []
+    [onSubmit]
   );
 
   const handleOptionSelect = useCallback(

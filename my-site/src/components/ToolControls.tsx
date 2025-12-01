@@ -28,7 +28,7 @@ export interface ToolControlsProps {
 
 const BRUSH_SIZES = [4, 10, 20] as const;
 
-export default function ToolControls({
+export function ToolControls({
   mode,
   strokeColor,
   brushSize,

@@ -24,5 +24,3 @@ export function CanvasBoardContainer({
     </div>
   );
 }
-
-export default CanvasBoardContainer;

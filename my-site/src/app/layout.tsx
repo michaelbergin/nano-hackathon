@@ -2,7 +2,7 @@ import "./globals.css";
 import { StackProvider, StackTheme } from "@stackframe/stack";
 import { stackClientApp } from "../stack/client";
 import type { Metadata, Viewport } from "next";
-import NoZoom from "../components/NoZoom";
+import { NoZoom } from "../components/NoZoom";
 import { Instrument_Serif, DM_Sans } from "next/font/google";
 
 const instrumentSerif = Instrument_Serif({

@@ -3,7 +3,7 @@
 import type { JSX, RefObject } from "react";
 import { memo } from "react";
 import type { BoardMode, Layer } from "./CanvasBoard";
-import LayerControls from "./LayerControls";
+import { LayerControlsBase as LayerControls } from "./LayerControls";
 import { GenerateControls } from "./GenerateControls";
 import { MobileDrawer } from "./MobileDrawer";
 import { LoadingAnimation } from "./LoadingAnimation";
@@ -11,7 +11,7 @@ import { Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronDown } from "lucide-react";
-import ToolControls from "./ToolControls";
+import { ToolControls } from "./ToolControls";
 
 export type CanvasControlsState = {
   mode: BoardMode;
@@ -283,5 +283,4 @@ function CanvasBoardControlsBase({
   );
 }
 
-const CanvasBoardControls = memo(CanvasBoardControlsBase);
-export default CanvasBoardControls;
+export const CanvasBoardControls = memo(CanvasBoardControlsBase);

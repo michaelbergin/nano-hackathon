@@ -4,6 +4,7 @@ import type { JSX } from "react";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { generateProjectName } from "@/lib/projectNameGenerator";
 
 export default function NewProjectPage(): JSX.Element {
   const router = useRouter();
@@ -19,10 +20,13 @@ export default function NewProjectPage(): JSX.Element {
           return;
         }
 
+        // Generate a random creative name for the project
+        const randomName = generateProjectName();
+
         const res = await fetch("/api/projects", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: "untitled" }),
+          body: JSON.stringify({ name: randomName }),
           credentials: "include",
           signal: controller.signal,
         });

@@ -134,6 +134,3 @@ export function Navigation({
     </>
   );
 }
-
-export default Navigation;
-

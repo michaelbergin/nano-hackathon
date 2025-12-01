@@ -15,7 +15,7 @@ interface SafariTouchEvent extends TouchEvent {
  * - Keyboard zoom (Ctrl/Cmd + '+', '-', '=', '0')
  * - Two-finger pinch on all touch devices
  */
-export default function NoZoom(): null {
+export function NoZoom(): null {
   useEffect(() => {
     // Track last touch time for double-tap detection
     let lastTouchEnd = 0;
