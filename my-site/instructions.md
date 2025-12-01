@@ -1,4 +1,4 @@
-# Banananano - Shadcn/UI Implementation
+# Monkey Doodle - Shadcn/UI Implementation
 
 ## 🚨 CRITICAL: No-Zoom Full-Frame Application Requirement
 
@@ -56,7 +56,7 @@ This application MUST maintain a full-frame, full-page experience with ABSOLUTEL
 
 ## Overview
 
-Successfully implemented shadcn/ui components throughout the Banananano application, replacing all custom UI elements with best-in-class, accessible components.
+Successfully implemented shadcn/ui components throughout the Monkey Doodle application, replacing all custom UI elements with best-in-class, accessible components.
 
 ## What Was Implemented
 
@@ -382,7 +382,7 @@ Acceptance:
 
 ### Quick Create (Untitled)
 
-- A quick-create icon is now in the header next to the `Banananano` brand.
+- A quick-create icon is now in the header next to the `Monkey Doodle` brand.
 - Clicking it navigates to `/new`, which performs the project creation and redirects to `/create?id=<projectId>`.
 - File: `src/components/Header.tsx` routes to `/new` for consistent behavior with the left menu.
 

@@ -1,7 +1,7 @@
 import type { JSX } from "react";
 
 /**
- * Custom banana icon component for Banananano branding
+ * Custom banana icon component for Monkey Doodle branding
  */
 export function BananaIcon({ className }: { className?: string }): JSX.Element {
   return (

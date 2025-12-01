@@ -13,8 +13,7 @@ import {
 import { boardReducer } from "./canvasBoardReducer";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { generateWorkflowPrompt } from "@/lib/generateSystemPrompt";
-import { getCoalescedEventsSafe, isCloudinaryResponse } from "@/lib/typeGuards";
-import { logError } from "@/lib/errors";
+import { getCoalescedEventsSafe } from "@/lib/typeGuards";
 
 // Re-export types from centralized location for backward compatibility
 export type {

@@ -66,7 +66,7 @@ Project thumbnails now update immediately when new screenshots are taken, provid
 
 ## Previous Work Context
 
-This project is a continuation of the Banananano application with shadcn/ui implementation and various fixes applied.
+This project is a continuation of the Monkey Doodle application with shadcn/ui implementation and various fixes applied.
 
 ## Multiplayer Plan (Loro) — September 2025
 
