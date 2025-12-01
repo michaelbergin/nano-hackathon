@@ -4,8 +4,10 @@ import type {
   PathStroke,
   VectorLayer,
   ImageLayer,
-} from "./CanvasBoard";
-import { boardReducer, createLayer } from "./canvasUtils";
+  Layer,
+} from "@/types/canvas";
+import { boardReducer } from "./canvasBoardReducer";
+import { createLayer } from "./canvasUtils";
 
 function initialState(): BoardState {
   const layer = createLayer("Layer 1");
@@ -75,7 +77,7 @@ describe("CanvasBoard reducer", () => {
       activeLayerId: image.id,
     };
     const s2 = boardReducer(sWithImage, { type: "ENSURE_ACTIVE_VECTOR_LAYER" });
-    const active = s2.layers.find((l) => l.id === s2.activeLayerId);
+    const active = s2.layers.find((l: Layer) => l.id === s2.activeLayerId);
     expect(active).toBeDefined();
     expect(active && active.type).toBe("vector");
   });
@@ -90,7 +92,7 @@ describe("CanvasBoard reducer", () => {
     };
     const s2 = boardReducer(s1, { type: "ADD_STROKE_TO_ACTIVE", stroke });
     const active = s2.layers.find(
-      (l) => l.id === s2.activeLayerId
+      (l: Layer) => l.id === s2.activeLayerId
     ) as VectorLayer;
     expect(active.strokes.length).toBe(1);
   });

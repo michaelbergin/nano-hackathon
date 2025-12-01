@@ -5,7 +5,7 @@ import type {
   VectorLayer,
   ImageLayer,
   BackgroundLayer,
-} from "./CanvasBoard";
+} from "@/types/canvas";
 import {
   createLayer,
   ensureActiveLayerId,

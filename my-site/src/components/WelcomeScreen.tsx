@@ -23,22 +23,11 @@ import {
 } from "lucide-react";
 import { useMobile } from "@/hooks/useMobile";
 
-export type WorkflowType = "draw" | "learn" | "explore";
+// Re-export types from centralized location for backward compatibility
+export type { WorkflowType, WorkflowOption, WorkflowConfig } from "@/types/workflow";
 
-export interface WorkflowOption {
-  key: string;
-  label: string;
-  icon: JSX.Element;
-  defaultPrompt: string;
-}
-
-export interface WorkflowConfig {
-  type: WorkflowType;
-  title: string;
-  subtitle: string;
-  icon: JSX.Element;
-  options: WorkflowOption[];
-}
+// Import types for local use
+import type { WorkflowType, WorkflowConfig } from "@/types/workflow";
 
 const WORKFLOWS: WorkflowConfig[] = [
   {

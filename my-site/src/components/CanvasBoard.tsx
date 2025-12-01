@@ -11,115 +11,47 @@ import {
   getCanvasScreenshotAsync,
 } from "./canvasUtils";
 import { boardReducer } from "./canvasBoardReducer";
-import { WelcomeScreen, type WorkflowType } from "./WelcomeScreen";
+import { WelcomeScreen } from "./WelcomeScreen";
 import { generateWorkflowPrompt } from "@/lib/generateSystemPrompt";
-// UI components integrated with CanvasBoardControls
+import { getCoalescedEventsSafe, isCloudinaryResponse } from "@/lib/typeGuards";
+import { logError } from "@/lib/errors";
 
-export type Point2 = [number, number];
-export type PolyLine2 = number[];
-export type PathStroke = {
-  points: PolyLine2;
-  color: string;
-  size: number;
-  erase: boolean;
-};
+// Re-export types from centralized location for backward compatibility
+export type {
+  Point2,
+  PolyLine2,
+  PathStroke,
+  BaseLayer,
+  VectorLayer,
+  ImageLayer,
+  BackgroundLayer,
+  Layer,
+  BoardMode,
+  BoardSnapshot,
+  BoardState,
+  BoardAction,
+} from "@/types/canvas";
 
-export type BaseLayer = {
-  id: string;
-  name: string;
-  visible: boolean;
-};
+// Import types for local use
+import type {
+  PathStroke,
+  Layer,
+  VectorLayer,
+  ImageLayer,
+  BackgroundLayer,
+  BaseLayer,
+  BoardMode,
+} from "@/types/canvas";
+import type { WorkflowType } from "@/types/workflow";
 
-export type VectorLayer = BaseLayer & {
-  type: "vector";
-  strokes: PathStroke[];
-  // optional offset in CSS pixels; defaults to 0 when undefined
-  offsetX?: number;
-  offsetY?: number;
-};
+// Legacy type aliases removed - now imported from @/types/canvas
+// Point2, PolyLine2, PathStroke, BaseLayer, VectorLayer, ImageLayer,
+// BackgroundLayer, Layer, BoardMode, BoardSnapshot, BoardState, BoardAction
 
-export type ImageLayer = BaseLayer & {
-  type: "image";
-  imageSrc: string;
-  banana?: boolean;
-  // optional placement rect in CSS pixels; if missing, image is aspect-fit
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-};
+// getCoalescedEventsSafe now imported from @/lib/typeGuards
 
-export type BackgroundLayer = BaseLayer & {
-  type: "background";
-  color: string;
-};
-
-export type Layer = VectorLayer | ImageLayer | BackgroundLayer;
-
-export type BoardMode = "draw" | "erase" | "move";
-
-export type BoardSnapshot = { layers: Layer[]; activeLayerId: string };
-export type BoardState = {
-  layers: Layer[];
-  activeLayerId: string;
-  mode: BoardMode;
-  strokeColor: string;
-  brushSize: number;
-  compositeDataUrl: string | null;
-  past: BoardSnapshot[];
-  future: BoardSnapshot[];
-};
-
-export type BoardAction =
-  | { type: "ADD_LAYER"; name?: string }
-  | { type: "REMOVE_LAYER"; id: string }
-  | { type: "SELECT_LAYER"; id: string }
-  | { type: "TOGGLE_LAYER_VISIBILITY"; id: string }
-  | { type: "CLEAR_LAYER"; id: string }
-  | { type: "RENAME_LAYER"; id: string; name: string }
-  | { type: "REORDER_LAYERS"; order: string[] }
-  | { type: "ADD_STROKE_TO_ACTIVE"; stroke: PathStroke }
-  | {
-      type: "ADD_IMAGE_LAYER_TOP";
-      name?: string;
-      imageSrc: string;
-      banana?: boolean;
-    }
-  | { type: "MOVE_LAYER"; id: string; dx: number; dy: number }
-  | {
-      type: "SET_IMAGE_BOUNDS";
-      id: string;
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    }
-  | { type: "SET_BACKGROUND_COLOR"; id: string; color: string }
-  | { type: "ENSURE_ACTIVE_VECTOR_LAYER" }
-  | { type: "CLEAR_ACTIVE_LAYER" }
-  | { type: "CLEAR_ALL_LAYERS" }
-  | { type: "SET_MODE"; mode: BoardMode }
-  | { type: "SET_COLOR"; color: string }
-  | { type: "SET_BRUSH_SIZE"; size: number }
-  | { type: "LOAD_FROM_DATA"; layers: Layer[] }
-  | { type: "SET_COMPOSITE"; dataUrl: string | null }
-  | { type: "UNDO" }
-  | { type: "REDO" };
-
-function getCoalescedEventsSafe(evt: PointerEvent): PointerEvent[] {
-  const candidate = evt as unknown as {
-    getCoalescedEvents?: () => PointerEvent[];
-  };
-  if (typeof candidate.getCoalescedEvents === "function") {
-    try {
-      const events = candidate.getCoalescedEvents();
-      return Array.isArray(events) ? events : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
+// Point2 type alias - now exported from @/types/canvas
+type Point2 = [number, number];
 
 /**
  * Props for CanvasBoard.
@@ -1314,7 +1246,7 @@ export function CanvasBoard({
   } as const;
 
   return (
-    <div className="relative w-full h-full overflow-hidden">
+    <div className="relative w-full h-full overflow-hidden rounded-xl">
       {/* Welcome Screen */}
       {showWelcome && <WelcomeScreen onSubmit={handleWelcomeSubmit} />}
 

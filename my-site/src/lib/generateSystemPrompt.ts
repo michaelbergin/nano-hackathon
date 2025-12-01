@@ -3,7 +3,7 @@
  * a system prompt with the user's input prompt.
  */
 
-import type { WorkflowType } from "@/components/WelcomeScreen";
+import type { WorkflowType } from "@/types/workflow";
 
 /**
  * The default system prompt that ensures the AI preserves the structure of input images
